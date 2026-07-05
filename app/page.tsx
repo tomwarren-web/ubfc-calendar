@@ -1,65 +1,251 @@
-import Image from "next/image";
+"use client";
+
+import { useCallback, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import type { BookingWithNames, Pitch, Team } from "@/lib/types";
+import { addDays, formatWeekLabel, startOfWeek, toDateStr } from "@/lib/time";
+import WeekCalendar from "@/components/WeekCalendar";
+import BookingModal, { type ModalDefaults } from "@/components/BookingModal";
 
 export default function Home() {
-  return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
+  const [pitches, setPitches] = useState<Pitch[]>([]);
+  const [teams, setTeams] = useState<Team[]>([]);
+  const [bookings, setBookings] = useState<BookingWithNames[]>([]);
+  const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date()));
+  const [activePitchId, setActivePitchId] = useState<number | null>(null);
+  const [name, setName] = useState("");
+  const [nameInput, setNameInput] = useState("");
+  const [modal, setModal] = useState<{
+    booking: BookingWithNames | null;
+    defaults: ModalDefaults;
+  } | null>(null);
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    setName(localStorage.getItem("pb_name") ?? "");
+    Promise.all([fetch("/api/pitches"), fetch("/api/teams")])
+      .then(async ([p, t]) => {
+        const pitchList: Pitch[] = await p.json();
+        setPitches(pitchList);
+        setTeams(await t.json());
+        if (pitchList.length > 0) setActivePitchId(pitchList[0].id);
+        setLoaded(true);
+      })
+      .catch(() => setLoaded(true));
+  }, []);
+
+  const from = toDateStr(weekStart);
+  const to = toDateStr(addDays(weekStart, 6));
+
+  const refreshBookings = useCallback(() => {
+    fetch(`/api/bookings?from=${from}&to=${to}`)
+      .then((r) => r.json())
+      .then(setBookings)
+      .catch(() => {});
+  }, [from, to]);
+
+  useEffect(refreshBookings, [refreshBookings]);
+
+  const activePitch = pitches.find((p) => p.id === activePitchId) ?? null;
+  const pitchBookings = useMemo(
+    () => bookings.filter((b) => b.pitchId === activePitchId),
+    [bookings, activePitchId]
+  );
+
+  function saveName() {
+    const trimmed = nameInput.trim();
+    if (!trimmed) return;
+    localStorage.setItem("pb_name", trimmed);
+    setName(trimmed);
+  }
+
+  function openNewBooking(date?: string, startMin?: number) {
+    if (!activePitch) return;
+    setModal({
+      booking: null,
+      defaults: {
+        pitchId: activePitch.id,
+        date: date ?? toDateStr(new Date()),
+        startMin: startMin ?? 18 * 60,
+      },
+    });
+  }
+
+  if (!loaded) {
+    return (
+      <main className="flex min-h-screen items-center justify-center text-slate-500">
+        Loading…
+      </main>
+    );
+  }
+
+  if (!name) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-slate-50 p-4">
+        <div className="w-full max-w-sm rounded-2xl bg-white p-8 shadow-lg">
+          <h1 className="text-xl font-bold text-slate-900">⚽ Pitch Booking</h1>
+          <p className="mt-2 text-sm text-slate-600">
+            Who&apos;s booking today? Your name is shown against every booking you make so the
+            committee knows who to talk to.
           </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+          <input
+            className="mt-4 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-200"
+            placeholder="e.g. Dave Smith (U15s manager)"
+            value={nameInput}
+            onChange={(e) => setNameInput(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && saveName()}
+            autoFocus
+          />
+          <button
+            onClick={saveName}
+            disabled={!nameInput.trim()}
+            className="mt-3 w-full rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
           >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+            Continue
+          </button>
         </div>
       </main>
-    </div>
+    );
+  }
+
+  return (
+    <main className="min-h-screen bg-slate-50">
+      <header className="border-b border-slate-200 bg-white">
+        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-3">
+          <h1 className="text-lg font-bold text-slate-900">⚽ Pitch Booking</h1>
+          <div className="flex items-center gap-3 text-sm">
+            <span className="text-slate-500">
+              Signed in as <span className="font-medium text-slate-800">{name}</span>
+            </span>
+            <button
+              onClick={() => {
+                localStorage.removeItem("pb_name");
+                setName("");
+                setNameInput("");
+              }}
+              className="text-slate-400 underline hover:text-slate-600"
+            >
+              change
+            </button>
+            <Link
+              href="/settings"
+              className="rounded-lg border border-slate-300 px-3 py-1.5 font-medium text-slate-700 hover:bg-slate-50"
+            >
+              Teams &amp; pitches
+            </Link>
+          </div>
+        </div>
+      </header>
+
+      <div className="mx-auto max-w-6xl space-y-4 px-4 py-6">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setWeekStart((w) => addDays(w, -7))}
+              className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
+            >
+              ← Prev
+            </button>
+            <button
+              onClick={() => setWeekStart(startOfWeek(new Date()))}
+              className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
+            >
+              Today
+            </button>
+            <button
+              onClick={() => setWeekStart((w) => addDays(w, 7))}
+              className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
+            >
+              Next →
+            </button>
+            <span className="ml-2 text-sm font-semibold text-slate-800">
+              {formatWeekLabel(weekStart)}
+            </span>
+          </div>
+          <button
+            onClick={() => openNewBooking()}
+            className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700"
+          >
+            + New booking
+          </button>
+        </div>
+
+        <div className="flex flex-wrap gap-2">
+          {pitches.map((p) => {
+            const count = bookings.filter((b) => b.pitchId === p.id).length;
+            return (
+              <button
+                key={p.id}
+                onClick={() => setActivePitchId(p.id)}
+                className={`rounded-full px-4 py-1.5 text-sm font-medium transition ${
+                  p.id === activePitchId
+                    ? "bg-slate-900 text-white"
+                    : "border border-slate-300 bg-white text-slate-700 hover:bg-slate-100"
+                }`}
+              >
+                {p.name}
+                {count > 0 && (
+                  <span
+                    className={`ml-1.5 text-xs ${p.id === activePitchId ? "text-slate-300" : "text-slate-400"}`}
+                  >
+                    {count}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+
+        {activePitch ? (
+          <WeekCalendar
+            weekStart={weekStart}
+            pitch={activePitch}
+            bookings={pitchBookings}
+            onSlotClick={(date, startMin) => openNewBooking(date, startMin)}
+            onBookingClick={(b) =>
+              setModal({
+                booking: b,
+                defaults: { pitchId: b.pitchId, date: b.date, startMin: b.startMin },
+              })
+            }
+          />
+        ) : (
+          <p className="text-sm text-slate-500">
+            No pitches set up yet — add one under{" "}
+            <Link href="/settings" className="underline">
+              Teams &amp; pitches
+            </Link>
+            .
+          </p>
+        )}
+
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-600">
+          {teams.map((t) => (
+            <span key={t.id} className="inline-flex items-center gap-1.5">
+              <span
+                className="inline-block h-3 w-3 rounded-sm"
+                style={{ backgroundColor: t.colour }}
+              />
+              {t.name}
+            </span>
+          ))}
+        </div>
+      </div>
+
+      {modal && activePitch && (
+        <BookingModal
+          pitches={pitches}
+          teams={teams}
+          bookedBy={name}
+          booking={modal.booking}
+          defaults={modal.defaults}
+          onClose={() => setModal(null)}
+          onSaved={() => {
+            setModal(null);
+            refreshBookings();
+          }}
+        />
+      )}
+    </main>
   );
 }

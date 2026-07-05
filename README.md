@@ -1,36 +1,56 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Pitch Booking
 
-## Getting Started
+A shared booking calendar for a football club with multiple teams and pitches. Managers and
+committee members book fixtures and training slots, and the app **blocks any booking that
+clashes** with an existing one on the same pitch.
 
-First, run the development server:
+## Features
+
+- **Week-view calendar per pitch** — tabs to switch between pitches, with booking counts.
+- **Click-to-book** — click an empty slot to book it, or click a booking to edit/delete it.
+- **Hard clash protection** — overlap checks run on the server; a clashing booking is rejected
+  with details of what it clashes with and who booked it. Back-to-back bookings (one ending as
+  another starts) are allowed.
+- **Fixtures vs training** — bookings are typed, with optional opposition/notes.
+- **Team colours** — each team's bookings are colour-coded on the calendar.
+- **Name picker sign-in** — no passwords; each user enters their name once (stored in their
+  browser) and it is recorded against every booking they make.
+- **Teams & pitches admin** — add or remove teams and pitches at `/settings`.
+
+## Running locally
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open http://localhost:3000. On first run the database is created at `data/bookings.db` and
+seeded with example pitches and teams — change them under **Teams & pitches**.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Deployment
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Data is stored in a local SQLite file, so the app needs a host with a **persistent disk**:
 
-## Learn More
+- **Railway / Fly.io / Render** — attach a volume and mount it so `data/` persists. Easiest option.
+- **A club machine or VPS** — `npm run build && npm start`, optionally exposed via a
+  Cloudflare Tunnel.
+- **Vercel** — serverless functions have no persistent disk, so SQLite will not work there.
+  To use Vercel, swap the storage layer in `lib/db.ts` for a hosted database
+  (e.g. Turso, Neon, or Vercel Postgres). All database access is confined to that one file.
 
-To learn more about Next.js, take a look at the following resources:
+Because there is no authentication beyond the name picker, keep the deployed URL private to
+club members (or put it behind your host's basic-auth / access controls).
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## API
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+| Method | Route | Purpose |
+| --- | --- | --- |
+| GET | `/api/bookings?from=YYYY-MM-DD&to=YYYY-MM-DD` | Bookings in a date range |
+| POST | `/api/bookings` | Create a booking (409 + clash details on conflict) |
+| PUT | `/api/bookings/:id` | Update a booking (same clash check, excluding itself) |
+| DELETE | `/api/bookings/:id` | Delete a booking |
+| GET/POST | `/api/pitches`, `/api/teams` | List / add pitches and teams |
+| DELETE | `/api/pitches/:id`, `/api/teams/:id` | Remove (cascades to their bookings) |
 
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Times are stored as minutes from midnight (`startMin`/`endMin`); the calendar displays
+08:00–22:00.
