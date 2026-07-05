@@ -19,9 +19,11 @@ export async function PUT(request: NextRequest, { params }: Params) {
     return NextResponse.json({ error: input }, { status: 400 });
   }
 
-  const clashes = findClashes(input.pitchId, input.date, input.startMin, input.endMin, bookingId);
-  if (clashes.length > 0) {
-    return NextResponse.json({ error: "clash", clashes }, { status: 409 });
+  if (input.pitchId !== null) {
+    const clashes = findClashes(input.pitchId, input.date, input.startMin, input.endMin, bookingId);
+    if (clashes.length > 0) {
+      return NextResponse.json({ error: "clash", clashes }, { status: 409 });
+    }
   }
 
   return NextResponse.json(updateBooking(bookingId, input));

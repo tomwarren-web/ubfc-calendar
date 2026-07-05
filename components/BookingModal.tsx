@@ -33,7 +33,8 @@ export default function BookingModal({
   onClose,
   onSaved,
 }: Props) {
-  const [pitchId, setPitchId] = useState(booking?.pitchId ?? defaults.pitchId);
+  // 0 in the select means "no pitch required" (training / away) and is stored as null.
+  const [pitchId, setPitchId] = useState(booking ? (booking.pitchId ?? 0) : defaults.pitchId);
   const [teamId, setTeamId] = useState(booking?.teamId ?? teams[0]?.id ?? 0);
   const [type, setType] = useState<"fixture" | "training">(booking?.type ?? "training");
   const [title, setTitle] = useState(booking?.title ?? "");
@@ -56,7 +57,16 @@ export default function BookingModal({
     setError(null);
     setClashes([]);
     try {
-      const payload = { pitchId, teamId, type, title, date, startMin, endMin, bookedBy };
+      const payload = {
+        pitchId: pitchId === 0 ? null : pitchId,
+        teamId,
+        type,
+        title,
+        date,
+        startMin,
+        endMin,
+        bookedBy,
+      };
       const res = await fetch(booking ? `/api/bookings/${booking.id}` : "/api/bookings", {
         method: booking ? "PUT" : "POST",
         headers: { "Content-Type": "application/json" },
@@ -133,9 +143,17 @@ export default function BookingModal({
                     {p.name}
                   </option>
                 ))}
+                <option value={0}>No pitch (training / away)</option>
               </select>
             </div>
           </div>
+
+          {pitchId === 0 && (
+            <p className="rounded-lg bg-slate-100 px-3 py-2 text-xs text-slate-600">
+              No pitch needed — this will show on the calendar under &quot;Off-site / no
+              pitch&quot; and can never cause a clash.
+            </p>
+          )}
 
           <div>
             <label className={labelCls}>Type</label>

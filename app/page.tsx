@@ -7,6 +7,9 @@ import { addDays, formatWeekLabel, startOfWeek, toDateStr } from "@/lib/time";
 import WeekCalendar from "@/components/WeekCalendar";
 import BookingModal, { type ModalDefaults } from "@/components/BookingModal";
 
+// Pseudo pitch id for the "Off-site / no pitch" tab (training, away games, Cubs sessions).
+const NO_PITCH = 0;
+
 export default function Home() {
   const [pitches, setPitches] = useState<Pitch[]>([]);
   const [teams, setTeams] = useState<Team[]>([]);
@@ -47,9 +50,17 @@ export default function Home() {
   useEffect(refreshBookings, [refreshBookings]);
 
   const activePitch = pitches.find((p) => p.id === activePitchId) ?? null;
+  const calendarLabel = activePitch?.name ?? "Off-site / no pitch";
   const pitchBookings = useMemo(
-    () => bookings.filter((b) => b.pitchId === activePitchId),
+    () =>
+      bookings.filter((b) =>
+        activePitchId === NO_PITCH ? b.pitchId === null : b.pitchId === activePitchId
+      ),
     [bookings, activePitchId]
+  );
+  const noPitchCount = useMemo(
+    () => bookings.filter((b) => b.pitchId === null).length,
+    [bookings]
   );
 
   function saveName() {
@@ -60,11 +71,11 @@ export default function Home() {
   }
 
   function openNewBooking(date?: string, startMin?: number) {
-    if (!activePitch) return;
+    if (activePitchId === null) return;
     setModal({
       booking: null,
       defaults: {
-        pitchId: activePitch.id,
+        pitchId: activePitchId,
         date: date ?? toDateStr(new Date()),
         startMin: startMin ?? 18 * 60,
       },
@@ -194,18 +205,36 @@ export default function Home() {
               </button>
             );
           })}
+          <button
+            onClick={() => setActivePitchId(NO_PITCH)}
+            className={`rounded-full px-4 py-1.5 text-sm font-medium transition ${
+              activePitchId === NO_PITCH
+                ? "bg-slate-900 text-white"
+                : "border border-dashed border-slate-400 bg-white text-slate-600 hover:bg-slate-100"
+            }`}
+            title="Training, away games and anything else that doesn't need a pitch"
+          >
+            Off-site / no pitch
+            {noPitchCount > 0 && (
+              <span
+                className={`ml-1.5 text-xs ${activePitchId === NO_PITCH ? "text-slate-300" : "text-slate-400"}`}
+              >
+                {noPitchCount}
+              </span>
+            )}
+          </button>
         </div>
 
-        {activePitch ? (
+        {activePitchId !== null ? (
           <WeekCalendar
             weekStart={weekStart}
-            pitch={activePitch}
+            label={calendarLabel}
             bookings={pitchBookings}
             onSlotClick={(date, startMin) => openNewBooking(date, startMin)}
             onBookingClick={(b) =>
               setModal({
                 booking: b,
-                defaults: { pitchId: b.pitchId, date: b.date, startMin: b.startMin },
+                defaults: { pitchId: b.pitchId ?? NO_PITCH, date: b.date, startMin: b.startMin },
               })
             }
           />
@@ -232,7 +261,7 @@ export default function Home() {
         </div>
       </div>
 
-      {modal && activePitch && (
+      {modal && (
         <BookingModal
           pitches={pitches}
           teams={teams}

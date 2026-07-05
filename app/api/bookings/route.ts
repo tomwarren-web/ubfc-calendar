@@ -20,9 +20,11 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: input }, { status: 400 });
   }
 
-  const clashes = findClashes(input.pitchId, input.date, input.startMin, input.endMin);
-  if (clashes.length > 0) {
-    return NextResponse.json({ error: "clash", clashes }, { status: 409 });
+  if (input.pitchId !== null) {
+    const clashes = findClashes(input.pitchId, input.date, input.startMin, input.endMin);
+    if (clashes.length > 0) {
+      return NextResponse.json({ error: "clash", clashes }, { status: 409 });
+    }
   }
 
   return NextResponse.json(createBooking(input), { status: 201 });

@@ -26,7 +26,7 @@ db.exec(`
 
   CREATE TABLE IF NOT EXISTS bookings (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    pitch_id INTEGER NOT NULL REFERENCES pitches(id) ON DELETE CASCADE,
+    pitch_id INTEGER REFERENCES pitches(id) ON DELETE CASCADE,
     team_id INTEGER NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
     type TEXT NOT NULL CHECK (type IN ('fixture', 'training')),
     title TEXT,
@@ -41,26 +41,28 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_bookings_pitch_date ON bookings(pitch_id, date);
 `);
 
-// Seed starter pitches and teams on first run so the app is usable immediately.
+// Seed the club's pitches and teams on first run so the app is usable immediately.
 const pitchCount = db.prepare("SELECT COUNT(*) AS c FROM pitches").get() as { c: number };
 if (pitchCount.c === 0) {
   const insertPitch = db.prepare("INSERT INTO pitches (name) VALUES (?)");
-  ["Main Pitch", "Top Pitch", "3G Training Area"].forEach((p) => insertPitch.run(p));
+  ["Main Pitch", "7v7 Pitch"].forEach((p) => insertPitch.run(p));
 
   const insertTeam = db.prepare("INSERT INTO teams (name, colour) VALUES (?, ?)");
   [
     ["First Team", "#dc2626"],
-    ["Reserves", "#ea580c"],
-    ["Ladies", "#9333ea"],
-    ["U18s", "#2563eb"],
-    ["U15s", "#0d9488"],
-    ["U12s", "#65a30d"],
+    ["Reserve Team", "#ea580c"],
+    ["Sunday Team", "#ca8a04"],
+    ["Vets", "#64748b"],
+    ["U16's", "#2563eb"],
+    ["U12's", "#0d9488"],
+    ["U11's", "#9333ea"],
+    ["Cubs", "#65a30d"],
   ].forEach(([name, colour]) => insertTeam.run(name, colour));
 }
 
 interface BookingRow {
   id: number;
-  pitch_id: number;
+  pitch_id: number | null;
   team_id: number;
   type: "fixture" | "training";
   title: string | null;
@@ -69,7 +71,7 @@ interface BookingRow {
   end_min: number;
   booked_by: string;
   created_at: string;
-  pitch_name: string;
+  pitch_name: string | null;
   team_name: string;
   team_colour: string;
 }
@@ -95,7 +97,7 @@ function toBooking(row: BookingRow): BookingWithNames {
 const bookingSelect = `
   SELECT b.*, p.name AS pitch_name, t.name AS team_name, t.colour AS team_colour
   FROM bookings b
-  JOIN pitches p ON p.id = b.pitch_id
+  LEFT JOIN pitches p ON p.id = b.pitch_id
   JOIN teams t ON t.id = b.team_id
 `;
 

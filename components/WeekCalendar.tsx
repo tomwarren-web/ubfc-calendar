@@ -1,6 +1,6 @@
 "use client";
 
-import type { BookingWithNames, Pitch } from "@/lib/types";
+import type { BookingWithNames } from "@/lib/types";
 import {
   DAY_END_MIN,
   DAY_START_MIN,
@@ -12,7 +12,8 @@ import {
 
 interface Props {
   weekStart: Date;
-  pitch: Pitch;
+  /** Name of the pitch being shown, or a label like "Off-site / no pitch". */
+  label: string;
   bookings: BookingWithNames[]; // already filtered to this pitch + week
   onSlotClick: (date: string, startMin: number) => void;
   onBookingClick: (booking: BookingWithNames) => void;
@@ -24,7 +25,7 @@ const GRID_HEIGHT = (TOTAL_MIN / 60) * HOUR_PX;
 
 export default function WeekCalendar({
   weekStart,
-  pitch,
+  label,
   bookings,
   onSlotClick,
   onBookingClick,
@@ -138,7 +139,7 @@ export default function WeekCalendar({
         </div>
       </div>
       <div className="border-t border-slate-200 px-3 py-2 text-xs text-slate-500">
-        {pitch.name} — click an empty slot to book, or a booking to edit it.
+        {label} — click an empty slot to book, or a booking to edit it.
       </div>
     </div>
   );

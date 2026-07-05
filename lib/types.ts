@@ -13,7 +13,8 @@ export interface Team {
 
 export interface Booking {
   id: number;
-  pitchId: number;
+  /** null = no pitch required (training or away/off-site) — never clashes */
+  pitchId: number | null;
   teamId: number;
   type: BookingType;
   title: string | null;
@@ -25,7 +26,7 @@ export interface Booking {
 }
 
 export interface BookingWithNames extends Booking {
-  pitchName: string;
+  pitchName: string | null;
   teamName: string;
   teamColour: string;
 }
