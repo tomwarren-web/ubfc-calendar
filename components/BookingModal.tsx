@@ -104,13 +104,14 @@ export default function BookingModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4"
+      className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/50 sm:items-center sm:p-4"
       onClick={onClose}
     >
       <div
-        className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl"
+        className="max-h-[92vh] w-full overflow-y-auto rounded-t-3xl bg-white p-5 pb-8 shadow-xl sm:max-w-md sm:rounded-2xl sm:p-6"
         onClick={(e) => e.stopPropagation()}
       >
+        <div className="mx-auto mb-3 h-1.5 w-10 rounded-full bg-slate-200 sm:hidden" />
         <h2 className="mb-4 text-lg font-bold text-navy">
           {booking ? "Edit booking" : "New booking"}
         </h2>
@@ -256,7 +257,7 @@ export default function BookingModal({
               <button
                 type="button"
                 onClick={onClose}
-                className="rounded-lg px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100"
+                className="rounded-lg px-4 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-100"
               >
                 Cancel
               </button>
@@ -264,7 +265,7 @@ export default function BookingModal({
                 type="button"
                 onClick={save}
                 disabled={saving || teams.length === 0}
-                className="rounded-lg bg-gold px-4 py-2 text-sm font-bold text-navy hover:bg-accent disabled:opacity-50"
+                className="rounded-lg bg-gold px-5 py-2.5 text-sm font-bold text-navy hover:bg-accent disabled:opacity-50"
               >
                 {saving ? "Saving…" : booking ? "Save changes" : "Book slot"}
               </button>

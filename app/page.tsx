@@ -3,10 +3,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import type { BookingWithNames, Pitch, Team } from "@/lib/types";
-import { addDays, formatWeekLabel, startOfWeek, toDateStr } from "@/lib/time";
+import { addDays, formatWeekLabel, startOfWeek, toDateStr, weekDays } from "@/lib/time";
 import WeekCalendar from "@/components/WeekCalendar";
 import BookingModal, { type ModalDefaults } from "@/components/BookingModal";
 import ClubLogo from "@/components/ClubLogo";
+import DayAgenda from "@/components/DayAgenda";
 
 // Pseudo pitch id for the "Off-site / no pitch" tab (training, away games, Cubs sessions).
 const NO_PITCH = 0;
@@ -16,6 +17,7 @@ export default function Home() {
   const [teams, setTeams] = useState<Team[]>([]);
   const [bookings, setBookings] = useState<BookingWithNames[]>([]);
   const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date()));
+  const [selectedDate, setSelectedDate] = useState(() => toDateStr(new Date()));
   const [activePitchId, setActivePitchId] = useState<number | null>(null);
   const [name, setName] = useState("");
   const [nameInput, setNameInput] = useState("");
@@ -63,6 +65,26 @@ export default function Home() {
     () => bookings.filter((b) => b.pitchId === null).length,
     [bookings]
   );
+  // Mobile day view shows every booking for the selected day, all pitches + off-site
+  const dayBookings = useMemo(
+    () =>
+      bookings
+        .filter((b) => b.date === selectedDate)
+        .sort(
+          (a, c) => a.startMin - c.startMin || (a.pitchName ?? "").localeCompare(c.pitchName ?? "")
+        ),
+    [bookings, selectedDate]
+  );
+
+  function shiftWeek(delta: number) {
+    setWeekStart((w) => addDays(w, delta * 7));
+    setSelectedDate((d) => toDateStr(addDays(new Date(d + "T00:00:00"), delta * 7)));
+  }
+
+  function goToToday() {
+    setWeekStart(startOfWeek(new Date()));
+    setSelectedDate(toDateStr(new Date()));
+  }
 
   function saveName() {
     const trimmed = nameInput.trim();
@@ -131,9 +153,10 @@ export default function Home() {
             <ClubLogo className="h-10 w-auto" />
             <h1 className="text-lg font-bold text-white">UBFC Pitch Booking</h1>
           </div>
-          <div className="flex items-center gap-3 text-sm">
-            <span className="text-slate-300">
-              Signed in as <span className="font-medium text-white">{name}</span>
+          <div className="flex min-w-0 items-center gap-3 text-sm">
+            <span className="min-w-0 truncate text-slate-300">
+              <span className="hidden sm:inline">Signed in as </span>
+              <span className="font-medium text-white">{name}</span>
             </span>
             <button
               onClick={() => {
@@ -155,23 +178,24 @@ export default function Home() {
         </div>
       </header>
 
-      <div className="mx-auto max-w-6xl space-y-4 px-4 py-6">
-        <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="mx-auto max-w-6xl space-y-4 px-4 py-4 pb-24 md:py-6 md:pb-6">
+        {/* Desktop week navigation */}
+        <div className="hidden flex-wrap items-center justify-between gap-3 md:flex">
           <div className="flex items-center gap-2">
             <button
-              onClick={() => setWeekStart((w) => addDays(w, -7))}
+              onClick={() => shiftWeek(-1)}
               className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
             >
               ← Prev
             </button>
             <button
-              onClick={() => setWeekStart(startOfWeek(new Date()))}
+              onClick={goToToday}
               className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
             >
               Today
             </button>
             <button
-              onClick={() => setWeekStart((w) => addDays(w, 7))}
+              onClick={() => shiftWeek(1)}
               className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
             >
               Next →
@@ -188,7 +212,83 @@ export default function Home() {
           </button>
         </div>
 
-        <div className="flex flex-wrap gap-2">
+        {/* Mobile day picker */}
+        <div className="space-y-3 md:hidden">
+          <div className="flex items-center justify-between">
+            <span className="text-base font-bold text-navy">
+              {new Date(selectedDate + "T00:00:00").toLocaleDateString("en-GB", {
+                month: "long",
+                year: "numeric",
+              })}
+            </span>
+            <button
+              onClick={goToToday}
+              className="rounded-full border border-slate-300 bg-white px-3 py-1 text-xs font-semibold text-slate-600 active:bg-slate-100"
+            >
+              Today
+            </button>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <button
+              onClick={() => shiftWeek(-1)}
+              aria-label="Previous week"
+              className="flex h-11 w-8 shrink-0 items-center justify-center rounded-lg text-lg text-slate-400 active:bg-slate-100"
+            >
+              ‹
+            </button>
+            <div className="grid flex-1 grid-cols-7 gap-1">
+              {weekDays(weekStart).map((d) => {
+                const dateStr = toDateStr(d);
+                const isSelected = dateStr === selectedDate;
+                const isToday = dateStr === toDateStr(new Date());
+                const hasBookings = bookings.some((b) => b.date === dateStr);
+                return (
+                  <button
+                    key={dateStr}
+                    onClick={() => setSelectedDate(dateStr)}
+                    className={`flex h-14 flex-col items-center justify-center rounded-xl text-center transition ${
+                      isSelected
+                        ? "bg-navy text-white shadow"
+                        : isToday
+                          ? "bg-accent/20 text-navy"
+                          : "bg-white text-slate-600 active:bg-slate-100"
+                    }`}
+                  >
+                    <span
+                      className={`text-[10px] font-medium uppercase ${isSelected ? "text-gold" : "text-slate-400"}`}
+                    >
+                      {d.toLocaleDateString("en-GB", { weekday: "short" }).slice(0, 2)}
+                    </span>
+                    <span className="text-sm font-bold leading-tight">{d.getDate()}</span>
+                    <span
+                      className={`mt-0.5 h-1 w-1 rounded-full ${
+                        hasBookings ? (isSelected ? "bg-gold" : "bg-navy/60") : "bg-transparent"
+                      }`}
+                    />
+                  </button>
+                );
+              })}
+            </div>
+            <button
+              onClick={() => shiftWeek(1)}
+              aria-label="Next week"
+              className="flex h-11 w-8 shrink-0 items-center justify-center rounded-lg text-lg text-slate-400 active:bg-slate-100"
+            >
+              ›
+            </button>
+          </div>
+          <DayAgenda
+            bookings={dayBookings}
+            onBookingClick={(b) =>
+              setModal({
+                booking: b,
+                defaults: { pitchId: b.pitchId ?? NO_PITCH, date: b.date, startMin: b.startMin },
+              })
+            }
+          />
+        </div>
+
+        <div className="hidden flex-wrap gap-2 md:flex">
           {pitches.map((p) => {
             const count = bookings.filter((b) => b.pitchId === p.id).length;
             return (
@@ -232,30 +332,32 @@ export default function Home() {
           </button>
         </div>
 
-        {activePitchId !== null ? (
-          <WeekCalendar
-            weekStart={weekStart}
-            label={calendarLabel}
-            bookings={pitchBookings}
-            onSlotClick={(date, startMin) => openNewBooking(date, startMin)}
-            onBookingClick={(b) =>
-              setModal({
-                booking: b,
-                defaults: { pitchId: b.pitchId ?? NO_PITCH, date: b.date, startMin: b.startMin },
-              })
-            }
-          />
-        ) : (
-          <p className="text-sm text-slate-500">
-            No pitches set up yet — add one under{" "}
-            <Link href="/settings" className="underline">
-              Teams &amp; pitches
-            </Link>
-            .
-          </p>
-        )}
+        <div className="hidden md:block">
+          {activePitchId !== null ? (
+            <WeekCalendar
+              weekStart={weekStart}
+              label={calendarLabel}
+              bookings={pitchBookings}
+              onSlotClick={(date, startMin) => openNewBooking(date, startMin)}
+              onBookingClick={(b) =>
+                setModal({
+                  booking: b,
+                  defaults: { pitchId: b.pitchId ?? NO_PITCH, date: b.date, startMin: b.startMin },
+                })
+              }
+            />
+          ) : (
+            <p className="text-sm text-slate-500">
+              No pitches set up yet — add one under{" "}
+              <Link href="/settings" className="underline">
+                Teams &amp; pitches
+              </Link>
+              .
+            </p>
+          )}
+        </div>
 
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-600">
+        <div className="hidden flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-600 md:flex">
           {teams.map((t) => (
             <span key={t.id} className="inline-flex items-center gap-1.5">
               <span
@@ -267,6 +369,15 @@ export default function Home() {
           ))}
         </div>
       </div>
+
+      {/* Mobile floating action button */}
+      <button
+        onClick={() => openNewBooking(selectedDate)}
+        aria-label="New booking"
+        className="fixed bottom-6 right-5 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-gold text-3xl font-bold text-navy shadow-lg transition active:scale-95 md:hidden"
+      >
+        +
+      </button>
 
       {modal && (
         <BookingModal
