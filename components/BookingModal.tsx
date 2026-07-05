@@ -100,7 +100,7 @@ export default function BookingModal({
 
   const labelCls = "block text-sm font-medium text-slate-600 mb-1";
   const inputCls =
-    "w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-200";
+    "w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-gold focus:outline-none focus:ring-2 focus:ring-accent/40";
 
   return (
     <div
@@ -111,7 +111,7 @@ export default function BookingModal({
         className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 className="mb-4 text-lg font-semibold text-slate-900">
+        <h2 className="mb-4 text-lg font-bold text-navy">
           {booking ? "Edit booking" : "New booking"}
         </h2>
 
@@ -165,7 +165,7 @@ export default function BookingModal({
                   onClick={() => setType(t)}
                   className={`flex-1 rounded-lg border px-3 py-2 text-sm font-medium capitalize transition ${
                     type === t
-                      ? "border-emerald-600 bg-emerald-50 text-emerald-700"
+                      ? "border-navy bg-navy text-white"
                       : "border-slate-300 bg-white text-slate-600 hover:bg-slate-50"
                   }`}
                 >
@@ -264,7 +264,7 @@ export default function BookingModal({
                 type="button"
                 onClick={save}
                 disabled={saving || teams.length === 0}
-                className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
+                className="rounded-lg bg-gold px-4 py-2 text-sm font-bold text-navy hover:bg-accent disabled:opacity-50"
               >
                 {saving ? "Saving…" : booking ? "Save changes" : "Book slot"}
               </button>

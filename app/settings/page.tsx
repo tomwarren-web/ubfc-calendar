@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import type { Pitch, Team } from "@/lib/types";
+import ClubLogo from "@/components/ClubLogo";
 
 export default function SettingsPage() {
   const [pitches, setPitches] = useState<Pitch[]>([]);
@@ -62,18 +63,21 @@ export default function SettingsPage() {
   }
 
   const inputCls =
-    "flex-1 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-200";
+    "flex-1 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-gold focus:outline-none focus:ring-2 focus:ring-accent/40";
   const addBtnCls =
-    "rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50";
+    "rounded-lg bg-gold px-4 py-2 text-sm font-bold text-navy hover:bg-accent disabled:opacity-50";
 
   return (
     <main className="min-h-screen bg-slate-50">
-      <header className="border-b border-slate-200 bg-white">
+      <header className="border-b-4 border-gold bg-navy">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3">
-          <h1 className="text-lg font-bold text-slate-900">⚽ Teams &amp; pitches</h1>
+          <div className="flex items-center gap-3">
+            <ClubLogo className="h-10 w-auto" />
+            <h1 className="text-lg font-bold text-white">Teams &amp; pitches</h1>
+          </div>
           <Link
             href="/"
-            className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
+            className="rounded-lg border border-gold/60 px-3 py-1.5 text-sm font-medium text-gold hover:bg-white/10"
           >
             ← Back to calendar
           </Link>
@@ -82,7 +86,7 @@ export default function SettingsPage() {
 
       <div className="mx-auto grid max-w-6xl gap-6 px-4 py-6 md:grid-cols-2">
         <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-          <h2 className="mb-1 font-semibold text-slate-900">Pitches</h2>
+          <h2 className="mb-1 font-bold text-navy">Pitches</h2>
           <p className="mb-4 text-sm text-slate-500">
             Clashes are checked per pitch — two teams can never book the same pitch at the same
             time.
@@ -115,7 +119,7 @@ export default function SettingsPage() {
         </section>
 
         <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-          <h2 className="mb-1 font-semibold text-slate-900">Teams</h2>
+          <h2 className="mb-1 font-bold text-navy">Teams</h2>
           <p className="mb-4 text-sm text-slate-500">
             Each team gets a colour so its bookings stand out on the calendar.
           </p>

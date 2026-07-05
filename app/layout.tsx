@@ -13,8 +13,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Pitch Booking",
-  description: "Fixture and training slot bookings with clash protection",
+  title: "UBFC Pitch Booking",
+  description: "UBFC fixture and training slot bookings with clash protection",
+  icons: { icon: "/logo.png" },
 };
 
 export default function RootLayout({

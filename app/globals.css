@@ -10,13 +10,11 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
-}
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  /* UBFC brand */
+  --color-navy: #001b4e; /* primary brand colour */
+  --color-gold: #f1c500; /* primary accent */
+  --color-accent: #ffd400; /* bright highlight, used sparingly */
 }
 
 body {

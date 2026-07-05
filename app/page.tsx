@@ -6,6 +6,7 @@ import type { BookingWithNames, Pitch, Team } from "@/lib/types";
 import { addDays, formatWeekLabel, startOfWeek, toDateStr } from "@/lib/time";
 import WeekCalendar from "@/components/WeekCalendar";
 import BookingModal, { type ModalDefaults } from "@/components/BookingModal";
+import ClubLogo from "@/components/ClubLogo";
 
 // Pseudo pitch id for the "Off-site / no pitch" tab (training, away games, Cubs sessions).
 const NO_PITCH = 0;
@@ -92,16 +93,19 @@ export default function Home() {
 
   if (!name) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-slate-50 p-4">
-        <div className="w-full max-w-sm rounded-2xl bg-white p-8 shadow-lg">
-          <h1 className="text-xl font-bold text-slate-900">⚽ Pitch Booking</h1>
-          <p className="mt-2 text-sm text-slate-600">
+      <main className="flex min-h-screen items-center justify-center bg-navy p-4">
+        <div className="w-full max-w-sm rounded-2xl bg-white p-8 shadow-xl">
+          <div className="flex flex-col items-center text-center">
+            <ClubLogo className="h-24 w-auto" />
+            <h1 className="mt-4 text-xl font-bold text-navy">UBFC Pitch Booking</h1>
+          </div>
+          <p className="mt-3 text-sm text-slate-600">
             Who&apos;s booking today? Your name is shown against every booking you make so the
             committee knows who to talk to.
           </p>
           <input
-            className="mt-4 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-200"
-            placeholder="e.g. Dave Smith (U15s manager)"
+            className="mt-4 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-gold focus:outline-none focus:ring-2 focus:ring-accent/40"
+            placeholder="e.g. Dave Smith (U12's manager)"
             value={nameInput}
             onChange={(e) => setNameInput(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && saveName()}
@@ -110,7 +114,7 @@ export default function Home() {
           <button
             onClick={saveName}
             disabled={!nameInput.trim()}
-            className="mt-3 w-full rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
+            className="mt-3 w-full rounded-lg bg-gold px-4 py-2 text-sm font-bold text-navy hover:bg-accent disabled:opacity-50"
           >
             Continue
           </button>
@@ -121,12 +125,15 @@ export default function Home() {
 
   return (
     <main className="min-h-screen bg-slate-50">
-      <header className="border-b border-slate-200 bg-white">
+      <header className="border-b-4 border-gold bg-navy">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-3">
-          <h1 className="text-lg font-bold text-slate-900">⚽ Pitch Booking</h1>
+          <div className="flex items-center gap-3">
+            <ClubLogo className="h-10 w-auto" />
+            <h1 className="text-lg font-bold text-white">UBFC Pitch Booking</h1>
+          </div>
           <div className="flex items-center gap-3 text-sm">
-            <span className="text-slate-500">
-              Signed in as <span className="font-medium text-slate-800">{name}</span>
+            <span className="text-slate-300">
+              Signed in as <span className="font-medium text-white">{name}</span>
             </span>
             <button
               onClick={() => {
@@ -134,13 +141,13 @@ export default function Home() {
                 setName("");
                 setNameInput("");
               }}
-              className="text-slate-400 underline hover:text-slate-600"
+              className="text-slate-400 underline hover:text-accent"
             >
               change
             </button>
             <Link
               href="/settings"
-              className="rounded-lg border border-slate-300 px-3 py-1.5 font-medium text-slate-700 hover:bg-slate-50"
+              className="rounded-lg border border-gold/60 px-3 py-1.5 font-medium text-gold hover:bg-white/10"
             >
               Teams &amp; pitches
             </Link>
@@ -175,7 +182,7 @@ export default function Home() {
           </div>
           <button
             onClick={() => openNewBooking()}
-            className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700"
+            className="rounded-lg bg-gold px-4 py-2 text-sm font-bold text-navy shadow-sm hover:bg-accent"
           >
             + New booking
           </button>
@@ -190,14 +197,14 @@ export default function Home() {
                 onClick={() => setActivePitchId(p.id)}
                 className={`rounded-full px-4 py-1.5 text-sm font-medium transition ${
                   p.id === activePitchId
-                    ? "bg-slate-900 text-white"
+                    ? "bg-navy text-white"
                     : "border border-slate-300 bg-white text-slate-700 hover:bg-slate-100"
                 }`}
               >
                 {p.name}
                 {count > 0 && (
                   <span
-                    className={`ml-1.5 text-xs ${p.id === activePitchId ? "text-slate-300" : "text-slate-400"}`}
+                    className={`ml-1.5 text-xs ${p.id === activePitchId ? "text-gold" : "text-slate-400"}`}
                   >
                     {count}
                   </span>
@@ -209,7 +216,7 @@ export default function Home() {
             onClick={() => setActivePitchId(NO_PITCH)}
             className={`rounded-full px-4 py-1.5 text-sm font-medium transition ${
               activePitchId === NO_PITCH
-                ? "bg-slate-900 text-white"
+                ? "bg-navy text-white"
                 : "border border-dashed border-slate-400 bg-white text-slate-600 hover:bg-slate-100"
             }`}
             title="Training, away games and anything else that doesn't need a pitch"
@@ -217,7 +224,7 @@ export default function Home() {
             Off-site / no pitch
             {noPitchCount > 0 && (
               <span
-                className={`ml-1.5 text-xs ${activePitchId === NO_PITCH ? "text-slate-300" : "text-slate-400"}`}
+                className={`ml-1.5 text-xs ${activePitchId === NO_PITCH ? "text-gold" : "text-slate-400"}`}
               >
                 {noPitchCount}
               </span>

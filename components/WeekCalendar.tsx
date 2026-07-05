@@ -55,7 +55,7 @@ export default function WeekCalendar({
               <div
                 key={d.toISOString()}
                 className={`border-l border-slate-200 px-2 py-2 text-center text-sm font-medium ${
-                  isToday ? "bg-emerald-50 text-emerald-700" : "text-slate-700"
+                  isToday ? "bg-accent/15 font-bold text-navy" : "text-slate-700"
                 }`}
               >
                 {formatDayLabel(d)}
