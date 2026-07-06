@@ -1,22 +1,29 @@
-import { createClient, type Client } from "@libsql/client";
-import path from "path";
-import fs from "fs";
+import { neon, type NeonQueryFunction } from "@neondatabase/serverless";
 import type { Booking, BookingWithNames, Pitch, Team } from "./types";
 
-// Production uses Turso (TURSO_DATABASE_URL + TURSO_AUTH_TOKEN); local dev
-// falls back to a SQLite file under data/.
-function makeClient(): Client {
-  const tursoUrl = process.env.TURSO_DATABASE_URL;
-  if (tursoUrl) {
-    return createClient({ url: tursoUrl, authToken: process.env.TURSO_AUTH_TOKEN });
+// Netlify DB (Postgres). Netlify injects NETLIFY_DB_URL in production and under
+// `netlify dev`; other environments can supply DATABASE_URL instead.
+function makeSql() {
+  const url =
+    process.env.NETLIFY_DB_URL ??
+    process.env.NETLIFY_DATABASE_URL ??
+    process.env.DATABASE_URL;
+  if (!url) {
+    throw new Error(
+      "No database configured — set NETLIFY_DB_URL (or DATABASE_URL) in the environment"
+    );
   }
-  const dataDir = path.join(process.cwd(), "data");
-  if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
-  const filePath = path.join(dataDir, "bookings.db").replace(/\\/g, "/");
-  return createClient({ url: `file:${filePath}` });
+  return neon(url);
 }
 
-const client = makeClient();
+// Lazy so that `next build` (which imports route modules) doesn't need the env var.
+let client: NeonQueryFunction<false, false> | null = null;
+const sql = {
+  query: (text: string, params?: unknown[]) => {
+    client ??= makeSql();
+    return client.query(text, params);
+  },
+};
 
 let initPromise: Promise<void> | null = null;
 function ensureInit(): Promise<void> {
@@ -25,18 +32,20 @@ function ensureInit(): Promise<void> {
 }
 
 async function init() {
-  await client.executeMultiple(`
+  await sql.query(`
     CREATE TABLE IF NOT EXISTS pitches (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      id INTEGER PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
       name TEXT NOT NULL UNIQUE
-    );
+    )`);
+  await sql.query(`
     CREATE TABLE IF NOT EXISTS teams (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      id INTEGER PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
       name TEXT NOT NULL UNIQUE,
       colour TEXT NOT NULL DEFAULT '#2563eb'
-    );
+    )`);
+  await sql.query(`
     CREATE TABLE IF NOT EXISTS bookings (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      id INTEGER PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
       pitch_id INTEGER REFERENCES pitches(id),
       team_id INTEGER NOT NULL REFERENCES teams(id),
       type TEXT NOT NULL CHECK (type IN ('fixture', 'training')),
@@ -45,38 +54,33 @@ async function init() {
       start_min INTEGER NOT NULL,
       end_min INTEGER NOT NULL,
       booked_by TEXT NOT NULL,
-      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
       CHECK (end_min > start_min)
-    );
-    CREATE INDEX IF NOT EXISTS idx_bookings_pitch_date ON bookings(pitch_id, date);
-  `);
+    )`);
+  await sql.query(
+    "CREATE INDEX IF NOT EXISTS idx_bookings_pitch_date ON bookings(pitch_id, date)"
+  );
 
   // Seed the club's pitches and teams on first run so the app is usable immediately.
-  const rs = await client.execute("SELECT COUNT(*) AS c FROM pitches");
-  if (Number(rs.rows[0].c) === 0) {
-    const statements = [
-      ...["Main Pitch", "7v7 Pitch"].map((name) => ({
-        sql: "INSERT INTO pitches (name) VALUES (?)",
-        args: [name],
-      })),
-      ...(
-        [
-          ["First Team", "#dc2626"],
-          ["Reserve Team", "#ea580c"],
-          ["Sunday Team", "#ca8a04"],
-          ["Vets", "#64748b"],
-          ["U16's", "#2563eb"],
-          ["U12's", "#0d9488"],
-          ["U11's", "#9333ea"],
-          ["Cubs", "#65a30d"],
-          ["Cricket Club", "#166534"],
-        ] as const
-      ).map(([name, colour]) => ({
-        sql: "INSERT INTO teams (name, colour) VALUES (?, ?)",
-        args: [name, colour],
-      })),
+  const countRows = await sql.query("SELECT COUNT(*) AS c FROM pitches");
+  if (Number((countRows as Row[])[0].c) === 0) {
+    for (const name of ["Main Pitch", "7v7 Pitch"]) {
+      await sql.query("INSERT INTO pitches (name) VALUES ($1)", [name]);
+    }
+    const teams: Array<[string, string]> = [
+      ["First Team", "#dc2626"],
+      ["Reserve Team", "#ea580c"],
+      ["Sunday Team", "#ca8a04"],
+      ["Vets", "#64748b"],
+      ["U16's", "#2563eb"],
+      ["U12's", "#0d9488"],
+      ["U11's", "#9333ea"],
+      ["Cubs", "#65a30d"],
+      ["Cricket Club", "#166534"],
     ];
-    await client.batch(statements, "write");
+    for (const [name, colour] of teams) {
+      await sql.query("INSERT INTO teams (name, colour) VALUES ($1, $2)", [name, colour]);
+    }
   }
 }
 
@@ -109,73 +113,58 @@ const bookingSelect = `
 
 export async function getPitches(): Promise<Pitch[]> {
   await ensureInit();
-  const rs = await client.execute("SELECT id, name FROM pitches ORDER BY id");
-  return rs.rows.map((r) => ({ id: Number(r.id), name: String(r.name) }));
+  const rows = (await sql.query("SELECT id, name FROM pitches ORDER BY id")) as Row[];
+  return rows.map((r) => ({ id: Number(r.id), name: String(r.name) }));
 }
 
 export async function addPitch(name: string): Promise<Pitch> {
   await ensureInit();
-  const rs = await client.execute({
-    sql: "INSERT INTO pitches (name) VALUES (?)",
-    args: [name.trim()],
-  });
-  return { id: Number(rs.lastInsertRowid), name: name.trim() };
+  const rows = (await sql.query("INSERT INTO pitches (name) VALUES ($1) RETURNING id", [
+    name.trim(),
+  ])) as Row[];
+  return { id: Number(rows[0].id), name: name.trim() };
 }
 
 export async function deletePitch(id: number): Promise<void> {
   await ensureInit();
-  await client.batch(
-    [
-      { sql: "DELETE FROM bookings WHERE pitch_id = ?", args: [id] },
-      { sql: "DELETE FROM pitches WHERE id = ?", args: [id] },
-    ],
-    "write"
-  );
+  await sql.query("DELETE FROM bookings WHERE pitch_id = $1", [id]);
+  await sql.query("DELETE FROM pitches WHERE id = $1", [id]);
 }
 
 export async function getTeams(): Promise<Team[]> {
   await ensureInit();
-  const rs = await client.execute("SELECT id, name, colour FROM teams ORDER BY id");
-  return rs.rows.map((r) => ({
-    id: Number(r.id),
-    name: String(r.name),
-    colour: String(r.colour),
-  }));
+  const rows = (await sql.query("SELECT id, name, colour FROM teams ORDER BY id")) as Row[];
+  return rows.map((r) => ({ id: Number(r.id), name: String(r.name), colour: String(r.colour) }));
 }
 
 export async function addTeam(name: string, colour: string): Promise<Team> {
   await ensureInit();
-  const rs = await client.execute({
-    sql: "INSERT INTO teams (name, colour) VALUES (?, ?)",
-    args: [name.trim(), colour],
-  });
-  return { id: Number(rs.lastInsertRowid), name: name.trim(), colour };
+  const rows = (await sql.query(
+    "INSERT INTO teams (name, colour) VALUES ($1, $2) RETURNING id",
+    [name.trim(), colour]
+  )) as Row[];
+  return { id: Number(rows[0].id), name: name.trim(), colour };
 }
 
 export async function deleteTeam(id: number): Promise<void> {
   await ensureInit();
-  await client.batch(
-    [
-      { sql: "DELETE FROM bookings WHERE team_id = ?", args: [id] },
-      { sql: "DELETE FROM teams WHERE id = ?", args: [id] },
-    ],
-    "write"
-  );
+  await sql.query("DELETE FROM bookings WHERE team_id = $1", [id]);
+  await sql.query("DELETE FROM teams WHERE id = $1", [id]);
 }
 
 export async function getBookings(from: string, to: string): Promise<BookingWithNames[]> {
   await ensureInit();
-  const rs = await client.execute({
-    sql: `${bookingSelect} WHERE b.date >= ? AND b.date <= ? ORDER BY b.date, b.start_min`,
-    args: [from, to],
-  });
-  return rs.rows.map(toBooking);
+  const rows = (await sql.query(
+    `${bookingSelect} WHERE b.date >= $1 AND b.date <= $2 ORDER BY b.date, b.start_min`,
+    [from, to]
+  )) as Row[];
+  return rows.map(toBooking);
 }
 
 export async function getBooking(id: number): Promise<BookingWithNames | undefined> {
   await ensureInit();
-  const rs = await client.execute({ sql: `${bookingSelect} WHERE b.id = ?`, args: [id] });
-  return rs.rows[0] ? toBooking(rs.rows[0]) : undefined;
+  const rows = (await sql.query(`${bookingSelect} WHERE b.id = $1`, [id])) as Row[];
+  return rows[0] ? toBooking(rows[0]) : undefined;
 }
 
 /** Bookings on the same pitch and date whose time range overlaps the given one. */
@@ -187,23 +176,23 @@ export async function findClashes(
   excludeId?: number
 ): Promise<BookingWithNames[]> {
   await ensureInit();
-  const rs = await client.execute({
-    sql: `${bookingSelect}
-      WHERE b.pitch_id = ? AND b.date = ? AND b.start_min < ? AND b.end_min > ?
-      AND b.id != ?`,
-    args: [pitchId, date, endMin, startMin, excludeId ?? -1],
-  });
-  return rs.rows.map(toBooking);
+  const rows = (await sql.query(
+    `${bookingSelect}
+     WHERE b.pitch_id = $1 AND b.date = $2 AND b.start_min < $3 AND b.end_min > $4
+     AND b.id != $5`,
+    [pitchId, date, endMin, startMin, excludeId ?? -1]
+  )) as Row[];
+  return rows.map(toBooking);
 }
 
 export type BookingInput = Omit<Booking, "id" | "createdAt">;
 
 export async function createBooking(input: BookingInput): Promise<BookingWithNames> {
   await ensureInit();
-  const rs = await client.execute({
-    sql: `INSERT INTO bookings (pitch_id, team_id, type, title, date, start_min, end_min, booked_by)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-    args: [
+  const rows = (await sql.query(
+    `INSERT INTO bookings (pitch_id, team_id, type, title, date, start_min, end_min, booked_by)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
+    [
       input.pitchId,
       input.teamId,
       input.type,
@@ -212,18 +201,18 @@ export async function createBooking(input: BookingInput): Promise<BookingWithNam
       input.startMin,
       input.endMin,
       input.bookedBy,
-    ],
-  });
-  return (await getBooking(Number(rs.lastInsertRowid)))!;
+    ]
+  )) as Row[];
+  return (await getBooking(Number(rows[0].id)))!;
 }
 
 export async function updateBooking(id: number, input: BookingInput): Promise<BookingWithNames> {
   await ensureInit();
-  await client.execute({
-    sql: `UPDATE bookings
-      SET pitch_id = ?, team_id = ?, type = ?, title = ?, date = ?, start_min = ?, end_min = ?, booked_by = ?
-      WHERE id = ?`,
-    args: [
+  await sql.query(
+    `UPDATE bookings
+     SET pitch_id = $1, team_id = $2, type = $3, title = $4, date = $5, start_min = $6, end_min = $7, booked_by = $8
+     WHERE id = $9`,
+    [
       input.pitchId,
       input.teamId,
       input.type,
@@ -233,12 +222,12 @@ export async function updateBooking(id: number, input: BookingInput): Promise<Bo
       input.endMin,
       input.bookedBy,
       id,
-    ],
-  });
+    ]
+  );
   return (await getBooking(id))!;
 }
 
 export async function deleteBooking(id: number): Promise<void> {
   await ensureInit();
-  await client.execute({ sql: "DELETE FROM bookings WHERE id = ?", args: [id] });
+  await sql.query("DELETE FROM bookings WHERE id = $1", [id]);
 }

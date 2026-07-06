@@ -1,0 +1,26 @@
+CREATE TABLE IF NOT EXISTS pitches (
+  id INTEGER PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
+  name TEXT NOT NULL UNIQUE
+);
+
+CREATE TABLE IF NOT EXISTS teams (
+  id INTEGER PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
+  name TEXT NOT NULL UNIQUE,
+  colour TEXT NOT NULL DEFAULT '#2563eb'
+);
+
+CREATE TABLE IF NOT EXISTS bookings (
+  id INTEGER PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
+  pitch_id INTEGER REFERENCES pitches(id),
+  team_id INTEGER NOT NULL REFERENCES teams(id),
+  type TEXT NOT NULL CHECK (type IN ('fixture', 'training')),
+  title TEXT,
+  date TEXT NOT NULL,
+  start_min INTEGER NOT NULL,
+  end_min INTEGER NOT NULL,
+  booked_by TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  CHECK (end_min > start_min)
+);
+
+CREATE INDEX IF NOT EXISTS idx_bookings_pitch_date ON bookings(pitch_id, date);

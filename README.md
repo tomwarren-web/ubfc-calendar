@@ -17,29 +17,35 @@ clashes** with an existing one on the same pitch.
   browser) and it is recorded against every booking they make.
 - **Teams & pitches admin** — add or remove teams and pitches at `/settings`.
 
+## Live site
+
+Production: **https://ubfc-calendar.netlify.app** — hosted on Netlify under the club's
+account (`upperbeedingfc@outlook.com`), with data in Netlify DB (managed Postgres). Teams
+and pitches are administered directly at `/settings` (deliberately unlinked from the UI).
+
 ## Running locally
 
 ```bash
 npm install
-npm run dev
+netlify dev
 ```
 
-Open http://localhost:3000. On first run the database is created at `data/bookings.db` and
-seeded with example pitches and teams — change them under **Teams & pitches**.
+`netlify dev` starts a local Postgres, applies the migrations in
+`netlify/database/migrations/`, and injects `NETLIFY_DB_URL`. (Plain `npm run dev` also
+works if you set `NETLIFY_DB_URL` or `DATABASE_URL` yourself.)
 
 ## Deployment
 
-Data is stored in a local SQLite file, so the app needs a host with a **persistent disk**:
+```bash
+netlify deploy --prod
+```
 
-- **Railway / Fly.io / Render** — attach a volume and mount it so `data/` persists. Easiest option.
-- **A club machine or VPS** — `npm run build && npm start`, optionally exposed via a
-  Cloudflare Tunnel.
-- **Vercel** — serverless functions have no persistent disk, so SQLite will not work there.
-  To use Vercel, swap the storage layer in `lib/db.ts` for a hosted database
-  (e.g. Turso, Neon, or Vercel Postgres). All database access is confined to that one file.
+Builds and deploys to the production URL; pending migrations are applied automatically
+during the deploy. Schema changes must be added as new timestamped folders under
+`netlify/database/migrations/` — applied migrations cannot be edited.
 
 Because there is no authentication beyond the name picker, keep the deployed URL private to
-club members (or put it behind your host's basic-auth / access controls).
+club members.
 
 ## API
 
