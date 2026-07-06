@@ -7,7 +7,7 @@ type Params = { params: Promise<{ id: string }> };
 export async function PUT(request: NextRequest, { params }: Params) {
   const { id } = await params;
   const bookingId = Number(id);
-  if (!getBooking(bookingId)) {
+  if (!(await getBooking(bookingId))) {
     return NextResponse.json({ error: "Booking not found" }, { status: 404 });
   }
 
@@ -20,21 +20,27 @@ export async function PUT(request: NextRequest, { params }: Params) {
   }
 
   if (input.pitchId !== null) {
-    const clashes = findClashes(input.pitchId, input.date, input.startMin, input.endMin, bookingId);
+    const clashes = await findClashes(
+      input.pitchId,
+      input.date,
+      input.startMin,
+      input.endMin,
+      bookingId
+    );
     if (clashes.length > 0) {
       return NextResponse.json({ error: "clash", clashes }, { status: 409 });
     }
   }
 
-  return NextResponse.json(updateBooking(bookingId, input));
+  return NextResponse.json(await updateBooking(bookingId, input));
 }
 
 export async function DELETE(_request: NextRequest, { params }: Params) {
   const { id } = await params;
   const bookingId = Number(id);
-  if (!getBooking(bookingId)) {
+  if (!(await getBooking(bookingId))) {
     return NextResponse.json({ error: "Booking not found" }, { status: 404 });
   }
-  deleteBooking(bookingId);
+  await deleteBooking(bookingId);
   return NextResponse.json({ ok: true });
 }

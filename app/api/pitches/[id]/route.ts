@@ -5,6 +5,6 @@ type Params = { params: Promise<{ id: string }> };
 
 export async function DELETE(_request: NextRequest, { params }: Params) {
   const { id } = await params;
-  deletePitch(Number(id));
+  await deletePitch(Number(id));
   return NextResponse.json({ ok: true });
 }
