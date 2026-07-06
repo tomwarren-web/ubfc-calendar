@@ -150,7 +150,7 @@ export default function Home() {
         <div className="w-full max-w-sm rounded-2xl bg-white p-8 shadow-xl">
           <div className="flex flex-col items-center text-center">
             <ClubLogo className="h-24 w-auto" />
-            <h1 className="mt-4 text-xl font-bold text-navy">UBFC Pitch Booking</h1>
+            <h1 className="mt-4 text-xl font-bold text-navy">UBFC Calendar</h1>
           </div>
           <p className="mt-3 text-sm text-slate-600">
             Who&apos;s booking today? Your name is shown against every booking you make so the
@@ -182,7 +182,7 @@ export default function Home() {
         <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-3">
           <div className="flex items-center gap-3">
             <ClubLogo className="h-10 w-auto" />
-            <h1 className="text-lg font-bold text-white">UBFC Pitch Booking</h1>
+            <h1 className="text-lg font-bold text-white">UBFC Calendar</h1>
           </div>
           <div className="flex min-w-0 items-center gap-3 text-sm">
             <span className="min-w-0 truncate text-slate-300">
@@ -199,12 +199,6 @@ export default function Home() {
             >
               change
             </button>
-            <Link
-              href="/settings"
-              className="rounded-lg border border-gold/60 px-3 py-1.5 font-medium text-gold hover:bg-white/10"
-            >
-              Teams &amp; pitches
-            </Link>
           </div>
         </div>
       </header>

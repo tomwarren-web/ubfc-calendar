@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "UBFC Pitch Booking",
+  title: "UBFC Calendar",
   description: "UBFC fixture and training slot bookings with clash protection",
   icons: { icon: "/logo.png" },
 };
