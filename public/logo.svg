@@ -1,7 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 120">
   <!-- Placeholder UBFC crest — replace by saving the real club logo as public/logo.png -->
-  <path d="M50 4 L92 14 C92 52 88 84 50 116 C12 84 8 52 8 14 Z" fill="#f1c500" />
-  <path d="M50 9 L87 18 C87 51 83 80 50 109 C17 80 13 51 13 18 Z" fill="#001b4e" />
+  <path d="M50 4 L92 14 C92 52 88 84 50 116 C12 84 8 52 8 14 Z" fill="#f5e731" />
+  <path d="M50 9 L87 18 C87 51 83 80 50 109 C17 80 13 51 13 18 Z" fill="#002e4c" />
   <text x="50" y="52" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="26" font-weight="bold" fill="#ffffff">UBFC</text>
-  <text x="50" y="78" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#f1c500">1925 · 2025</text>
+  <text x="50" y="78" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="11" fill="#f5e731">1925 · 2025</text>
 </svg>

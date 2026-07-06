@@ -77,7 +77,7 @@ export default function MonthGrid({ monthAnchor, bookings, selectedDate, onSelec
                       <span
                         key={c}
                         className="h-1.5 w-1.5 rounded-full"
-                        style={{ backgroundColor: isSelected ? "#f1c500" : c }}
+                        style={{ backgroundColor: isSelected ? "#f5e731" : c }}
                       />
                     ))}
                   </span>
