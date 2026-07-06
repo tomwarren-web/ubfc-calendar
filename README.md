@@ -36,13 +36,11 @@ works if you set `NETLIFY_DB_URL` or `DATABASE_URL` yourself.)
 
 ## Deployment
 
-```bash
-netlify deploy --prod
-```
-
-Builds and deploys to the production URL; pending migrations are applied automatically
-during the deploy. Schema changes must be added as new timestamped folders under
-`netlify/database/migrations/` — applied migrations cannot be edited.
+Every push to `master` on GitHub auto-deploys to production via Netlify's GitHub
+integration. Pending migrations are applied automatically during the deploy; schema
+changes must be added as new timestamped folders under `netlify/database/migrations/` —
+applied migrations cannot be edited. (`netlify deploy --prod` still works for manual
+deploys from this folder.)
 
 Because there is no authentication beyond the name picker, keep the deployed URL private to
 club members.
