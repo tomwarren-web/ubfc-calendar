@@ -8,6 +8,10 @@ import WeekCalendar from "@/components/WeekCalendar";
 import BookingModal, { type ModalDefaults } from "@/components/BookingModal";
 import ClubLogo from "@/components/ClubLogo";
 import DayAgenda from "@/components/DayAgenda";
+import WeekAgenda from "@/components/WeekAgenda";
+import MonthGrid from "@/components/MonthGrid";
+
+type MobileView = "day" | "week" | "month";
 
 // Pseudo pitch id for the "Off-site / no pitch" tab (training, away games, Cubs sessions).
 const NO_PITCH = 0;
@@ -18,6 +22,17 @@ export default function Home() {
   const [bookings, setBookings] = useState<BookingWithNames[]>([]);
   const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date()));
   const [selectedDate, setSelectedDate] = useState(() => toDateStr(new Date()));
+  const [viewMode, setViewMode] = useState<MobileView>("day");
+
+  useEffect(() => {
+    const saved = localStorage.getItem("pb_view");
+    if (saved === "week" || saved === "month") setViewMode(saved);
+  }, []);
+
+  function changeView(mode: MobileView) {
+    setViewMode(mode);
+    localStorage.setItem("pb_view", mode);
+  }
   const [activePitchId, setActivePitchId] = useState<number | null>(null);
   const [name, setName] = useState("");
   const [nameInput, setNameInput] = useState("");
@@ -40,15 +55,24 @@ export default function Home() {
       .catch(() => setLoaded(true));
   }, []);
 
-  const from = toDateStr(weekStart);
-  const to = toDateStr(addDays(weekStart, 6));
+  // Month view needs the full month grid (including leading/trailing week days);
+  // day and week views only need the current week.
+  const range = useMemo(() => {
+    if (viewMode === "month") {
+      const d = new Date(selectedDate + "T00:00:00");
+      const first = new Date(d.getFullYear(), d.getMonth(), 1);
+      const last = new Date(d.getFullYear(), d.getMonth() + 1, 0);
+      return { from: toDateStr(startOfWeek(first)), to: toDateStr(addDays(startOfWeek(last), 6)) };
+    }
+    return { from: toDateStr(weekStart), to: toDateStr(addDays(weekStart, 6)) };
+  }, [viewMode, selectedDate, weekStart]);
 
   const refreshBookings = useCallback(() => {
-    fetch(`/api/bookings?from=${from}&to=${to}`)
+    fetch(`/api/bookings?from=${range.from}&to=${range.to}`)
       .then((r) => r.json())
       .then(setBookings)
       .catch(() => {});
-  }, [from, to]);
+  }, [range.from, range.to]);
 
   useEffect(refreshBookings, [refreshBookings]);
 
@@ -84,6 +108,13 @@ export default function Home() {
   function goToToday() {
     setWeekStart(startOfWeek(new Date()));
     setSelectedDate(toDateStr(new Date()));
+  }
+
+  function shiftMonth(delta: number) {
+    const d = new Date(selectedDate + "T00:00:00");
+    const firstOfTarget = new Date(d.getFullYear(), d.getMonth() + delta, 1);
+    setSelectedDate(toDateStr(firstOfTarget));
+    setWeekStart(startOfWeek(firstOfTarget));
   }
 
   function saveName() {
@@ -212,80 +243,156 @@ export default function Home() {
           </button>
         </div>
 
-        {/* Mobile day picker */}
+        {/* Mobile views */}
         <div className="space-y-3 md:hidden">
-          <div className="flex items-center justify-between">
-            <span className="text-base font-bold text-navy">
-              {new Date(selectedDate + "T00:00:00").toLocaleDateString("en-GB", {
-                month: "long",
-                year: "numeric",
-              })}
+          <div className="flex items-center justify-between gap-2">
+            <span className="min-w-0 truncate text-base font-bold text-navy">
+              {viewMode === "week"
+                ? formatWeekLabel(weekStart)
+                : new Date(selectedDate + "T00:00:00").toLocaleDateString("en-GB", {
+                    month: "long",
+                    year: "numeric",
+                  })}
             </span>
-            <button
-              onClick={goToToday}
-              className="rounded-full border border-slate-300 bg-white px-3 py-1 text-xs font-semibold text-slate-600 active:bg-slate-100"
-            >
-              Today
-            </button>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <button
-              onClick={() => shiftWeek(-1)}
-              aria-label="Previous week"
-              className="flex h-11 w-8 shrink-0 items-center justify-center rounded-lg text-lg text-slate-400 active:bg-slate-100"
-            >
-              ‹
-            </button>
-            <div className="grid flex-1 grid-cols-7 gap-1">
-              {weekDays(weekStart).map((d) => {
-                const dateStr = toDateStr(d);
-                const isSelected = dateStr === selectedDate;
-                const isToday = dateStr === toDateStr(new Date());
-                const hasBookings = bookings.some((b) => b.date === dateStr);
-                return (
-                  <button
-                    key={dateStr}
-                    onClick={() => setSelectedDate(dateStr)}
-                    className={`flex h-14 flex-col items-center justify-center rounded-xl text-center transition ${
-                      isSelected
-                        ? "bg-navy text-white shadow"
-                        : isToday
-                          ? "bg-accent/20 text-navy"
-                          : "bg-white text-slate-600 active:bg-slate-100"
-                    }`}
-                  >
-                    <span
-                      className={`text-[10px] font-medium uppercase ${isSelected ? "text-gold" : "text-slate-400"}`}
-                    >
-                      {d.toLocaleDateString("en-GB", { weekday: "short" }).slice(0, 2)}
-                    </span>
-                    <span className="text-sm font-bold leading-tight">{d.getDate()}</span>
-                    <span
-                      className={`mt-0.5 h-1 w-1 rounded-full ${
-                        hasBookings ? (isSelected ? "bg-gold" : "bg-navy/60") : "bg-transparent"
-                      }`}
-                    />
-                  </button>
-                );
-              })}
+            <div className="flex shrink-0 items-center gap-1">
+              {viewMode !== "day" && (
+                <button
+                  onClick={() => (viewMode === "month" ? shiftMonth(-1) : shiftWeek(-1))}
+                  aria-label={viewMode === "month" ? "Previous month" : "Previous week"}
+                  className="flex h-8 w-8 items-center justify-center rounded-full border border-slate-300 bg-white text-slate-500 active:bg-slate-100"
+                >
+                  ‹
+                </button>
+              )}
+              <button
+                onClick={goToToday}
+                className="rounded-full border border-slate-300 bg-white px-3 py-1 text-xs font-semibold text-slate-600 active:bg-slate-100"
+              >
+                Today
+              </button>
+              {viewMode !== "day" && (
+                <button
+                  onClick={() => (viewMode === "month" ? shiftMonth(1) : shiftWeek(1))}
+                  aria-label={viewMode === "month" ? "Next month" : "Next week"}
+                  className="flex h-8 w-8 items-center justify-center rounded-full border border-slate-300 bg-white text-slate-500 active:bg-slate-100"
+                >
+                  ›
+                </button>
+              )}
             </div>
-            <button
-              onClick={() => shiftWeek(1)}
-              aria-label="Next week"
-              className="flex h-11 w-8 shrink-0 items-center justify-center rounded-lg text-lg text-slate-400 active:bg-slate-100"
-            >
-              ›
-            </button>
           </div>
-          <DayAgenda
-            bookings={dayBookings}
-            onBookingClick={(b) =>
-              setModal({
-                booking: b,
-                defaults: { pitchId: b.pitchId ?? NO_PITCH, date: b.date, startMin: b.startMin },
-              })
-            }
-          />
+
+          {/* View switcher */}
+          <div className="grid grid-cols-3 gap-1 rounded-full border border-slate-200 bg-white p-1">
+            {(["day", "week", "month"] as const).map((m) => (
+              <button
+                key={m}
+                onClick={() => changeView(m)}
+                className={`rounded-full py-1.5 text-xs font-semibold capitalize transition ${
+                  viewMode === m ? "bg-navy text-white" : "text-slate-600 active:bg-slate-100"
+                }`}
+              >
+                {m}
+              </button>
+            ))}
+          </div>
+
+          {viewMode === "day" && (
+            <>
+              <div className="flex items-center gap-1.5">
+                <button
+                  onClick={() => shiftWeek(-1)}
+                  aria-label="Previous week"
+                  className="flex h-11 w-8 shrink-0 items-center justify-center rounded-lg text-lg text-slate-400 active:bg-slate-100"
+                >
+                  ‹
+                </button>
+                <div className="grid flex-1 grid-cols-7 gap-1">
+                  {weekDays(weekStart).map((d) => {
+                    const dateStr = toDateStr(d);
+                    const isSelected = dateStr === selectedDate;
+                    const isToday = dateStr === toDateStr(new Date());
+                    const hasBookings = bookings.some((b) => b.date === dateStr);
+                    return (
+                      <button
+                        key={dateStr}
+                        onClick={() => setSelectedDate(dateStr)}
+                        className={`flex h-14 flex-col items-center justify-center rounded-xl text-center transition ${
+                          isSelected
+                            ? "bg-navy text-white shadow"
+                            : isToday
+                              ? "bg-accent/20 text-navy"
+                              : "bg-white text-slate-600 active:bg-slate-100"
+                        }`}
+                      >
+                        <span
+                          className={`text-[10px] font-medium uppercase ${isSelected ? "text-gold" : "text-slate-400"}`}
+                        >
+                          {d.toLocaleDateString("en-GB", { weekday: "short" }).slice(0, 2)}
+                        </span>
+                        <span className="text-sm font-bold leading-tight">{d.getDate()}</span>
+                        <span
+                          className={`mt-0.5 h-1 w-1 rounded-full ${
+                            hasBookings ? (isSelected ? "bg-gold" : "bg-navy/60") : "bg-transparent"
+                          }`}
+                        />
+                      </button>
+                    );
+                  })}
+                </div>
+                <button
+                  onClick={() => shiftWeek(1)}
+                  aria-label="Next week"
+                  className="flex h-11 w-8 shrink-0 items-center justify-center rounded-lg text-lg text-slate-400 active:bg-slate-100"
+                >
+                  ›
+                </button>
+              </div>
+              <DayAgenda
+                bookings={dayBookings}
+                onBookingClick={(b) =>
+                  setModal({
+                    booking: b,
+                    defaults: {
+                      pitchId: b.pitchId ?? NO_PITCH,
+                      date: b.date,
+                      startMin: b.startMin,
+                    },
+                  })
+                }
+              />
+            </>
+          )}
+
+          {viewMode === "week" && (
+            <WeekAgenda
+              days={weekDays(weekStart)}
+              bookings={bookings}
+              onBookingClick={(b) =>
+                setModal({
+                  booking: b,
+                  defaults: {
+                    pitchId: b.pitchId ?? NO_PITCH,
+                    date: b.date,
+                    startMin: b.startMin,
+                  },
+                })
+              }
+            />
+          )}
+
+          {viewMode === "month" && (
+            <MonthGrid
+              monthAnchor={selectedDate}
+              bookings={bookings}
+              selectedDate={selectedDate}
+              onSelectDay={(date) => {
+                setSelectedDate(date);
+                setWeekStart(startOfWeek(new Date(date + "T00:00:00")));
+                changeView("day");
+              }}
+            />
+          )}
         </div>
 
         <div className="hidden flex-wrap gap-2 md:flex">
