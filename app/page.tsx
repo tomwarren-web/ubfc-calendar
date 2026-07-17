@@ -10,6 +10,7 @@ import ClubLogo from "@/components/ClubLogo";
 import DayAgenda from "@/components/DayAgenda";
 import WeekAgenda from "@/components/WeekAgenda";
 import MonthGrid from "@/components/MonthGrid";
+import { composeWeekShareText, whatsAppShareUrl } from "@/lib/share";
 
 type MobileView = "day" | "week" | "month";
 
@@ -115,6 +116,14 @@ export default function Home() {
     const firstOfTarget = new Date(d.getFullYear(), d.getMonth() + delta, 1);
     setSelectedDate(toDateStr(firstOfTarget));
     setWeekStart(startOfWeek(firstOfTarget));
+  }
+
+  // Opens WhatsApp with the displayed week's events pre-filled, ready to send
+  // to the club group.
+  function shareWeek() {
+    const weekDates = new Set(weekDays(weekStart).map(toDateStr));
+    const weekBookings = bookings.filter((b) => weekDates.has(b.date));
+    window.open(whatsAppShareUrl(composeWeekShareText(weekBookings, weekStart)), "_blank");
   }
 
   function saveName() {
@@ -229,12 +238,21 @@ export default function Home() {
               {formatWeekLabel(weekStart)}
             </span>
           </div>
-          <button
-            onClick={() => openNewBooking()}
-            className="rounded-lg bg-gold px-4 py-2 text-sm font-bold text-navy shadow-sm hover:bg-accent"
-          >
-            + New booking
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={shareWeek}
+              title="Open WhatsApp with this week's events pre-filled"
+              className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+            >
+              Share to WhatsApp
+            </button>
+            <button
+              onClick={() => openNewBooking()}
+              className="rounded-lg bg-gold px-4 py-2 text-sm font-bold text-navy shadow-sm hover:bg-accent"
+            >
+              + New booking
+            </button>
+          </div>
         </div>
 
         {/* Mobile views */}
@@ -273,6 +291,13 @@ export default function Home() {
                   ›
                 </button>
               )}
+              <button
+                onClick={shareWeek}
+                aria-label="Share this week's events to WhatsApp"
+                className="rounded-full bg-[#25D366] px-3 py-1 text-xs font-bold text-white active:brightness-90"
+              >
+                Share
+              </button>
             </div>
           </div>
 
