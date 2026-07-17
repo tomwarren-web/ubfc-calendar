@@ -1,11 +1,14 @@
 name: FA Full-Time fixture sync
 
 # Fetches each team's public FA Full-Time page and posts the HTML to the
-# calendar's sync endpoint, which parses and reconciles fixtures. This runs
-# here (not on Netlify) because the FA's WAF blocks requests from AWS IPs.
+# calendar's sync endpoint, which parses and reconciles fixtures.
+#
+# NOTE: the FA's WAF blocks GitHub-hosted runners (fetches time out), the
+# same as Netlify/AWS — verified 2026-07-17. The daily schedule therefore
+# lives in Windows Task Scheduler on the club machine running
+# scripts/fulltime-fetch.ps1. This workflow is kept dispatch-only in case
+# the FA ever unblocks cloud IPs.
 on:
-  schedule:
-    - cron: "30 4 * * *" # daily, before the Monday 06:00 digest
   workflow_dispatch:
 
 jobs:
