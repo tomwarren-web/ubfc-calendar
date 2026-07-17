@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createBooking, findClashes, getBookings } from "@/lib/db";
 import { parseBookingInput } from "@/lib/validate";
+import { notifyBookingChange } from "@/lib/notify";
 
 export async function GET(request: NextRequest) {
   const from = request.nextUrl.searchParams.get("from");
@@ -27,5 +28,7 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  return NextResponse.json(await createBooking(input), { status: 201 });
+  const created = await createBooking(input);
+  await notifyBookingChange("added", created);
+  return NextResponse.json(created, { status: 201 });
 }
