@@ -1,0 +1,42 @@
+name: FA Full-Time fixture sync
+
+# Fetches each team's public FA Full-Time page and posts the HTML to the
+# calendar's sync endpoint, which parses and reconciles fixtures. This runs
+# here (not on Netlify) because the FA's WAF blocks requests from AWS IPs.
+on:
+  schedule:
+    - cron: "30 4 * * *" # daily, before the Monday 06:00 digest
+  workflow_dispatch:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fetch FA pages and post to calendar
+        env:
+          SYNC_SECRET: ${{ secrets.SYNC_SECRET }}
+          SITE: https://ubfc-calendar.netlify.app
+        run: |
+          set -uo pipefail
+          config=$(curl -sf "$SITE/api/fulltime-sync?key=$SYNC_SECRET")
+          echo "Teams configured: $(echo "$config" | jq length)"
+
+          pages="[]"
+          for row in $(echo "$config" | jq -r '.[] | @base64'); do
+            appTeam=$(echo "$row" | base64 -d | jq -r .appTeam)
+            url=$(echo "$row" | base64 -d | jq -r .url)
+            echo "Fetching: $appTeam"
+            html=$(curl -sf --max-time 30 \
+              -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36" \
+              "$url") || { echo "::warning::Failed to fetch $appTeam"; continue; }
+            pages=$(jq --arg team "$appTeam" --arg html "$html" '. + [{appTeam: $team, html: $html}]' <<< "$pages")
+          done
+
+          jq -n --argjson pages "$pages" '{pages: $pages}' > payload.json
+          echo "Posting $(jq '.pages | length' payload.json) page(s) to sync endpoint"
+          report=$(curl -sf -X POST -H "Content-Type: application/json" \
+            -H "x-sync-key: $SYNC_SECRET" --data @payload.json \
+            "$SITE/api/fulltime-sync")
+          echo "$report" | jq .
+          # Fail the job (→ GitHub notification) if the sync reported errors
+          [ "$(echo "$report" | jq '.errors | length')" = "0" ]

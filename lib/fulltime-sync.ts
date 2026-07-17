@@ -31,14 +31,24 @@ function describeFixture(date: string, startMin: number, team: string, title: st
   return `${team} — ${title} (${nice} ${formatMin(startMin)})`;
 }
 
+/** A team page fetched by an external runner (the FA blocks cloud-host IPs). */
+export interface TeamPage {
+  appTeam: string;
+  html: string;
+}
+
 /**
  * Reconciles FA Full-Time upcoming fixtures into the calendar. Only bookings
  * this sync created (source_ref = "fulltime:<id>") are ever touched; manual
  * bookings, training and cricket blocks are invisible to it. Fixtures whose
  * pitch slot clashes with an existing booking are imported as off-site and
  * flagged, never silently dropped and never overriding the clash block.
+ *
+ * The FA's WAF drops requests from Netlify/AWS IPs, so page HTML is normally
+ * supplied by an external fetcher (GitHub Actions) via `pages`; direct
+ * fetching remains as a fallback for environments the FA doesn't block.
  */
-export async function runFullTimeSync(): Promise<SyncReport> {
+export async function runFullTimeSync(pages?: TeamPage[]): Promise<SyncReport> {
   const report: SyncReport = {
     added: [],
     updated: [],
@@ -69,14 +79,31 @@ export async function runFullTimeSync(): Promise<SyncReport> {
       continue;
     }
 
+    let html: string;
+    if (pages) {
+      const page = pages.find((p) => p.appTeam === cfg.appTeam);
+      if (!page) {
+        report.errors.push(`${cfg.appTeam}: fetcher supplied no page for this team`);
+        continue; // no data — leave this team's existing bookings untouched
+      }
+      html = page.html;
+    } else {
+      try {
+        const res = await fetch(cfg.url, { headers: { "User-Agent": "UBFC-Calendar-Sync/1.0" } });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        html = await res.text();
+      } catch (err) {
+        report.errors.push(`${cfg.appTeam}: failed to read FA Full-Time (${String(err)})`);
+        continue;
+      }
+    }
+
     let fixtures;
     try {
-      const res = await fetch(cfg.url, { headers: { "User-Agent": "UBFC-Calendar-Sync/1.0" } });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      fixtures = parseUpcomingFixtures(await res.text());
+      fixtures = parseUpcomingFixtures(html);
     } catch (err) {
-      report.errors.push(`${cfg.appTeam}: failed to read FA Full-Time (${String(err)})`);
-      continue; // fetch failed — leave this team's existing bookings untouched
+      report.errors.push(`${cfg.appTeam}: could not parse FA page (${String(err)})`);
+      continue;
     }
 
     report.checkedTeams++;
