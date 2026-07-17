@@ -23,6 +23,25 @@ Production: **https://ubfc-calendar.netlify.app** — hosted on Netlify under th
 account (`upperbeedingfc@outlook.com`), with data in Netlify DB (managed Postgres). Teams
 and pitches are administered directly at `/settings` (deliberately unlinked from the UI).
 
+## FA Full-Time fixture sync
+
+A scheduled function (`netlify/functions/fulltime-sync.mts`, daily 04:30 UTC) reads each
+configured team's public FA Full-Time page and reconciles upcoming fixtures into the
+calendar: new fixtures are added (home games on the team's configured pitch, away games as
+off-site), changed ones updated, and vanished/postponed ones removed. It only ever touches
+bookings it created (`source_ref = "fulltime:<fixtureId>"`) — manual bookings are never
+altered. If an imported home fixture clashes with an existing booking it is imported as
+off-site and flagged in the summary email rather than dropped. A change-summary email goes
+to the booking-notification address after any run that did something.
+
+Teams are configured in [`lib/fulltime.ts`](lib/fulltime.ts) (`FULLTIME_TEAMS`). **The
+`divisionseason` in each team's URL changes every season** — update the URLs when the new
+season's fixtures are published. Manual trigger:
+`POST /api/fulltime-sync?key=<SYNC_SECRET>`.
+
+FA Full-Time has no official API, so this reads the public HTML pages; if the FA change
+their markup the sync emails an error rather than failing silently.
+
 ## Running locally
 
 ```bash

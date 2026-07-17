@@ -23,6 +23,8 @@ export interface Booking {
   endMin: number;
   bookedBy: string;
   createdAt: string;
+  /** Set for externally-synced bookings, e.g. "fulltime:<fixtureId>" */
+  sourceRef: string | null;
 }
 
 export interface BookingWithNames extends Booking {

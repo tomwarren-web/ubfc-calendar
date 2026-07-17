@@ -55,6 +55,7 @@ async function init() {
       end_min INTEGER NOT NULL,
       booked_by TEXT NOT NULL,
       created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      source_ref TEXT,
       CHECK (end_min > start_min)
     )`);
   await sql.query(
@@ -98,6 +99,7 @@ function toBooking(row: Row): BookingWithNames {
     endMin: Number(row.end_min),
     bookedBy: String(row.booked_by),
     createdAt: String(row.created_at),
+    sourceRef: row.source_ref == null ? null : String(row.source_ref),
     pitchName: row.pitch_name === null ? null : String(row.pitch_name),
     teamName: String(row.team_name),
     teamColour: String(row.team_colour),
@@ -185,13 +187,18 @@ export async function findClashes(
   return rows.map(toBooking);
 }
 
-export type BookingInput = Omit<Booking, "id" | "createdAt">;
+// sourceRef is only set by external syncs; manual bookings leave it null.
+// updateBooking deliberately never touches source_ref, so a manual edit of a
+// synced booking keeps its link to the external fixture.
+export type BookingInput = Omit<Booking, "id" | "createdAt" | "sourceRef"> & {
+  sourceRef?: string | null;
+};
 
 export async function createBooking(input: BookingInput): Promise<BookingWithNames> {
   await ensureInit();
   const rows = (await sql.query(
-    `INSERT INTO bookings (pitch_id, team_id, type, title, date, start_min, end_min, booked_by)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
+    `INSERT INTO bookings (pitch_id, team_id, type, title, date, start_min, end_min, booked_by, source_ref)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id`,
     [
       input.pitchId,
       input.teamId,
@@ -201,9 +208,20 @@ export async function createBooking(input: BookingInput): Promise<BookingWithNam
       input.startMin,
       input.endMin,
       input.bookedBy,
+      input.sourceRef ?? null,
     ]
   )) as Row[];
   return (await getBooking(Number(rows[0].id)))!;
+}
+
+/** All bookings whose source_ref starts with the given prefix (e.g. "fulltime:"). */
+export async function getBookingsBySourcePrefix(prefix: string): Promise<BookingWithNames[]> {
+  await ensureInit();
+  const rows = (await sql.query(
+    `${bookingSelect} WHERE b.source_ref LIKE $1 ORDER BY b.date, b.start_min`,
+    [`${prefix}%`]
+  )) as Row[];
+  return rows.map(toBooking);
 }
 
 export async function updateBooking(id: number, input: BookingInput): Promise<BookingWithNames> {
