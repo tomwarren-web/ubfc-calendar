@@ -56,7 +56,9 @@ export default async () => {
     method: "POST",
     headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
     body: JSON.stringify({
-      from: "UBFC Calendar <onboarding@resend.dev>",
+      // Sandbox sender until the club domain is verified in Resend; then set
+      // NUDGE_FROM to e.g. "UBFC Calendar <calendar@upperbeedingfc.co.uk>".
+      from: process.env.NUDGE_FROM ?? "UBFC Calendar <onboarding@resend.dev>",
       to: [to],
       subject: `UBFC weekly digest — ${formatWeekLabel(weekStart)}`,
       html: emailHtml,
