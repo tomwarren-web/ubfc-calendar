@@ -61,6 +61,23 @@ async function init() {
   await sql.query(
     "CREATE INDEX IF NOT EXISTS idx_bookings_pitch_date ON bookings(pitch_id, date)"
   );
+  await sql.query(`
+    CREATE TABLE IF NOT EXISTS match_contacts (
+      booking_id INTEGER PRIMARY KEY REFERENCES bookings(id) ON DELETE CASCADE,
+      referee_name TEXT NOT NULL DEFAULT '',
+      referee_email TEXT NOT NULL DEFAULT '',
+      opposition_name TEXT NOT NULL DEFAULT '',
+      opposition_email TEXT NOT NULL DEFAULT '',
+      league TEXT NOT NULL DEFAULT '',
+      notes TEXT NOT NULL DEFAULT '',
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    )`);
+  await sql.query(`
+    CREATE TABLE IF NOT EXISTS opposition_directory (
+      club_name TEXT PRIMARY KEY,
+      contact_email TEXT NOT NULL DEFAULT '',
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    )`);
 
   // Seed the club's pitches and teams on first run so the app is usable immediately.
   const countRows = await sql.query("SELECT COUNT(*) AS c FROM pitches");
@@ -248,4 +265,76 @@ export async function updateBooking(id: number, input: BookingInput): Promise<Bo
 export async function deleteBooking(id: number): Promise<void> {
   await ensureInit();
   await sql.query("DELETE FROM bookings WHERE id = $1", [id]);
+}
+
+// ---------- Match confirmation contacts ----------
+
+export interface MatchContacts {
+  bookingId: number;
+  refereeName: string;
+  refereeEmail: string;
+  oppositionName: string;
+  oppositionEmail: string;
+  league: string;
+  notes: string;
+}
+
+function toMatchContacts(row: Row): MatchContacts {
+  return {
+    bookingId: Number(row.booking_id),
+    refereeName: String(row.referee_name ?? ""),
+    refereeEmail: String(row.referee_email ?? ""),
+    oppositionName: String(row.opposition_name ?? ""),
+    oppositionEmail: String(row.opposition_email ?? ""),
+    league: String(row.league ?? ""),
+    notes: String(row.notes ?? ""),
+  };
+}
+
+export async function getMatchContacts(bookingIds: number[]): Promise<MatchContacts[]> {
+  await ensureInit();
+  if (bookingIds.length === 0) return [];
+  const rows = (await sql.query(
+    "SELECT * FROM match_contacts WHERE booking_id = ANY($1::int[])",
+    [bookingIds]
+  )) as Row[];
+  return rows.map(toMatchContacts);
+}
+
+export async function upsertMatchContacts(mc: MatchContacts): Promise<void> {
+  await ensureInit();
+  await sql.query(
+    `INSERT INTO match_contacts (booking_id, referee_name, referee_email, opposition_name, opposition_email, league, notes, updated_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, now())
+     ON CONFLICT (booking_id) DO UPDATE SET
+       referee_name = $2, referee_email = $3, opposition_name = $4,
+       opposition_email = $5, league = $6, notes = $7, updated_at = now()`,
+    [
+      mc.bookingId,
+      mc.refereeName.trim(),
+      mc.refereeEmail.trim(),
+      mc.oppositionName.trim(),
+      mc.oppositionEmail.trim(),
+      mc.league.trim(),
+      mc.notes.trim(),
+    ]
+  );
+  // Remember the opposition contact season-long so it pre-fills next time
+  if (mc.oppositionName.trim() && mc.oppositionEmail.trim()) {
+    await sql.query(
+      `INSERT INTO opposition_directory (club_name, contact_email, updated_at)
+       VALUES ($1, $2, now())
+       ON CONFLICT (club_name) DO UPDATE SET contact_email = $2, updated_at = now()`,
+      [mc.oppositionName.trim(), mc.oppositionEmail.trim()]
+    );
+  }
+}
+
+export async function lookupOppositionEmail(clubName: string): Promise<string> {
+  await ensureInit();
+  const rows = (await sql.query(
+    "SELECT contact_email FROM opposition_directory WHERE lower(club_name) = lower($1)",
+    [clubName.trim()]
+  )) as Row[];
+  return rows[0] ? String(rows[0].contact_email) : "";
 }
