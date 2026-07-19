@@ -20,6 +20,28 @@ export interface FullTimeTeamConfig {
 // FA Full-Time, update each team's URL (the divisionseason ID changes).
 export const FULLTIME_TEAMS: FullTimeTeamConfig[] = [
   {
+    // "Upper Beeding" — Southern Combination Football League (2026-27)
+    appTeam: "First Team",
+    url: "https://fulltime.thefa.com/displayTeam.html?divisionseason=665376135&teamID=449068268",
+    homePitch: "Main Pitch",
+    durationMin: 120,
+  },
+  {
+    // "Upper Beeding Reserves" — West Sussex Football League (2026-27)
+    appTeam: "Reserve Team",
+    url: "https://fulltime.thefa.com/displayTeam.html?divisionseason=299191871&teamID=325030964",
+    homePitch: "Main Pitch",
+    durationMin: 120,
+  },
+  {
+    // "Upper Beeding Sunday" — SSFL Sussex Sunday Football League (2026-27)
+    appTeam: "Sunday Team",
+    url: "https://fulltime.thefa.com/displayTeam.html?divisionseason=853007003&teamID=648487847",
+    homePitch: "Main Pitch",
+    durationMin: 120,
+  },
+  {
+    // 2025-26 season page — update when the new season's fixtures are published
     appTeam: "U11's",
     url: "https://fulltime.thefa.com/displayTeam.html?divisionseason=30425424&teamID=836078784",
     homePitch: "7v7 Pitch",
