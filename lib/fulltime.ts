@@ -101,9 +101,10 @@ export function parseFixtureTable(tableHtml: string): FullTimeFixture[] {
     // After the away-team cell, "left cell-divider" cells are venue then
     // competition when both exist, or just competition when there's no venue
     // column (competitions are short codes; venues are longer ground names).
+    // (team pages mark these cells "left", league pages "left cell-divider")
     const trailing = cells
       .slice(awayIdx + 1)
-      .filter((c) => c.attrs.includes("cell-divider") && c.text.length > 0);
+      .filter((c) => c.attrs.includes("left") && c.text.length > 0);
     let venue: string | null = null;
     let competition: string | null = null;
     if (trailing.length >= 2) {
