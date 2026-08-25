@@ -82,7 +82,7 @@ export function parseFixtureTable(tableHtml: string): FullTimeFixture[] {
 
     const idMatch = row.match(/displayFixture\.html\?id=(\d+)/);
     const dateMatch = row.match(/(\d{2})\/(\d{2})\/(\d{2})/);
-    if (!idMatch || !dateMatch) continue;
+    if (!dateMatch) continue;
 
     const [, dd, mm, yy] = dateMatch;
     const timeMatch = row.match(/(\d{2}):(\d{2})/);
@@ -113,8 +113,15 @@ export function parseFixtureTable(tableHtml: string): FullTimeFixture[] {
       competition = trailing[0].text;
     }
 
+    // County Cup rows carry no fixture link, so synthesise a stable key from
+    // the date and team names instead.
+    const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 30);
+    const fixtureId =
+      idMatch?.[1] ??
+      `x-20${yy}${mm}${dd}-${slug(cells[homeIdx].text)}-${slug(cells[awayIdx].text)}`;
+
     fixtures.push({
-      fixtureId: idMatch[1],
+      fixtureId,
       date: `20${yy}-${mm}-${dd}`,
       startMin,
       homeTeam: cells[homeIdx].text,
