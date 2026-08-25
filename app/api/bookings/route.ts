@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createBooking, findClashes, getBookings } from "@/lib/db";
 import { parseBookingInput } from "@/lib/validate";
 import { notifyBookingChange } from "@/lib/notify";
+import { cachedJson, purgeTags } from "@/lib/cache";
 
 export async function GET(request: NextRequest) {
   const from = request.nextUrl.searchParams.get("from");
@@ -9,7 +10,7 @@ export async function GET(request: NextRequest) {
   if (!from || !to) {
     return NextResponse.json({ error: "from and to query params are required" }, { status: 400 });
   }
-  return NextResponse.json(await getBookings(from, to));
+  return cachedJson(await getBookings(from, to), "bookings");
 }
 
 export async function POST(request: NextRequest) {
@@ -29,6 +30,7 @@ export async function POST(request: NextRequest) {
   }
 
   const created = await createBooking(input);
+  await purgeTags(["bookings"]);
   await notifyBookingChange("added", created);
   return NextResponse.json(created, { status: 201 });
 }

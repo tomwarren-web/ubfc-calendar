@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { deleteBooking, findClashes, getBooking, updateBooking } from "@/lib/db";
 import { parseBookingInput } from "@/lib/validate";
 import { notifyBookingChange } from "@/lib/notify";
+import { purgeTags } from "@/lib/cache";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -34,6 +35,7 @@ export async function PUT(request: NextRequest, { params }: Params) {
   }
 
   const updated = await updateBooking(bookingId, input);
+  await purgeTags(["bookings"]);
   await notifyBookingChange("edited", updated);
   return NextResponse.json(updated);
 }
@@ -46,6 +48,7 @@ export async function DELETE(_request: NextRequest, { params }: Params) {
     return NextResponse.json({ error: "Booking not found" }, { status: 404 });
   }
   await deleteBooking(bookingId);
+  await purgeTags(["bookings"]);
   await notifyBookingChange("removed", existing);
   return NextResponse.json({ ok: true });
 }

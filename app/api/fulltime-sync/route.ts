@@ -30,6 +30,10 @@ export async function POST(request: NextRequest) {
   }
 
   const report = await runFullTimeSync(pages);
+  if (report.added.length || report.updated.length || report.removed.length) {
+    const { purgeTags } = await import("@/lib/cache");
+    await purgeTags(["bookings"]);
+  }
   await emailSyncReport(report);
   return NextResponse.json(report);
 }
