@@ -41,10 +41,24 @@ export const FULLTIME_TEAMS: FullTimeTeamConfig[] = [
     durationMin: 120,
   },
   {
-    // 2025-26 season page — update when the new season's fixtures are published
+    // "Upper Beeding U11" — Horsham & District Youth FL, U11 Umbro (2026-27)
     appTeam: "U11's",
-    url: "https://fulltime.thefa.com/displayTeam.html?divisionseason=30425424&teamID=836078784",
+    url: "https://fulltime.thefa.com/displayTeam.html?divisionseason=890791379&teamID=714938495",
     homePitch: "7v7 Pitch",
+    durationMin: 90,
+  },
+  {
+    // "Upper Beeding U12" — Horsham & District Youth FL, U12A (2026-27)
+    appTeam: "U12's",
+    url: "https://fulltime.thefa.com/displayTeam.html?divisionseason=179178909&teamID=836078784",
+    homePitch: "Main Pitch",
+    durationMin: 90,
+  },
+  {
+    // "Upper Beeding U16" — Mid Sussex Youth FL, U16 Division 4 (2026-27)
+    appTeam: "U16's",
+    url: "https://fulltime.thefa.com/displayTeam.html?divisionseason=167235657&teamID=526717235",
+    homePitch: "Main Pitch",
     durationMin: 90,
   },
 ];
