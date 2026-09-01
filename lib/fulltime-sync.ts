@@ -34,6 +34,9 @@ function describeFixture(date: string, startMin: number, team: string, title: st
 /** A team page fetched by an external runner (the FA blocks cloud-host IPs). */
 export interface TeamPage {
   appTeam: string;
+  /** Config-entry URL this page was fetched from; disambiguates teams that
+   * appear in several competitions (one FA page per competition). */
+  url?: string;
   html: string;
 }
 
@@ -65,7 +68,10 @@ export async function runFullTimeSync(pages?: TeamPage[]): Promise<SyncReport> {
   ]);
   const byRef = new Map(existing.map((b) => [b.sourceRef as string, b]));
   const seenRefs = new Set<string>();
-  const syncedTeamIds = new Set<number>(); // teams whose page fetched OK — safe to remove their stale bookings
+  // Stale-booking removal is only safe for teams where EVERY configured page
+  // synced this run (a team can have one page per competition).
+  const syncedTeamIds = new Set<number>();
+  const failedTeamIds = new Set<number>();
 
   for (const cfg of FULLTIME_TEAMS) {
     const appTeam = teams.find((t) => t.name === cfg.appTeam);
@@ -81,9 +87,14 @@ export async function runFullTimeSync(pages?: TeamPage[]): Promise<SyncReport> {
 
     let html: string;
     if (pages) {
-      const page = pages.find((p) => p.appTeam === cfg.appTeam);
+      // Prefer URL matching (unique per config entry); appTeam is the legacy
+      // fallback for payloads that don't carry the url field.
+      const page =
+        pages.find((p) => p.url && p.url === cfg.url) ??
+        pages.find((p) => !p.url && p.appTeam === cfg.appTeam);
       if (!page) {
-        report.errors.push(`${cfg.appTeam}: fetcher supplied no page for this team`);
+        report.errors.push(`${cfg.appTeam}: fetcher supplied no page for ${cfg.url}`);
+        failedTeamIds.add(appTeam.id);
         continue; // no data — leave this team's existing bookings untouched
       }
       html = page.html;
@@ -94,6 +105,7 @@ export async function runFullTimeSync(pages?: TeamPage[]): Promise<SyncReport> {
         html = await res.text();
       } catch (err) {
         report.errors.push(`${cfg.appTeam}: failed to read FA Full-Time (${String(err)})`);
+        failedTeamIds.add(appTeam.id);
         continue;
       }
     }
@@ -103,6 +115,7 @@ export async function runFullTimeSync(pages?: TeamPage[]): Promise<SyncReport> {
       fixtures = parseUpcomingFixtures(html);
     } catch (err) {
       report.errors.push(`${cfg.appTeam}: could not parse FA page (${String(err)})`);
+      failedTeamIds.add(appTeam.id);
       continue;
     }
 
@@ -198,7 +211,7 @@ export async function runFullTimeSync(pages?: TeamPage[]): Promise<SyncReport> {
   for (const b of existing) {
     if (seenRefs.has(b.sourceRef as string)) continue;
     if (b.date < today) continue; // leave history alone
-    if (!syncedTeamIds.has(b.teamId)) continue;
+    if (!syncedTeamIds.has(b.teamId) || failedTeamIds.has(b.teamId)) continue;
     await deleteBooking(b.id);
     report.removed.push(describeFixture(b.date, b.startMin, b.teamName, b.title ?? ""));
   }

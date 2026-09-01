@@ -63,7 +63,7 @@ for (let i = 0; i < config.length; i++) {
   for (let attempt = 1; attempt <= 2; attempt++) {
     try {
       const html = await fetchTeamPage(team, `${i}-${attempt}`);
-      pages.push({ appTeam: team.appTeam, html });
+      pages.push({ appTeam: team.appTeam, url: team.url, html });
       console.log(`Fetched: ${team.appTeam}${attempt > 1 ? " (retry)" : ""}`);
       lastErr = null;
       break;

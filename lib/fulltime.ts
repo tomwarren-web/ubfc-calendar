@@ -34,9 +34,17 @@ export const FULLTIME_TEAMS: FullTimeTeamConfig[] = [
     durationMin: 120,
   },
   {
-    // "Upper Beeding Sunday" — SSFL Sussex Sunday Football League (2026-27)
+    // "Upper Beeding Sunday" — SSFL cup competitions (2026-27)
     appTeam: "Sunday Team",
     url: "https://fulltime.thefa.com/displayTeam.html?divisionseason=853007003&teamID=648487847",
+    homePitch: "Main Pitch",
+    durationMin: 120,
+  },
+  {
+    // "Upper Beeding Sunday" — SSFL league division (2026-27). A team can have
+    // several FA pages, one per competition; each gets its own config entry.
+    appTeam: "Sunday Team",
+    url: "https://fulltime.thefa.com/displayTeam.html?divisionseason=691249596&teamID=648487847",
     homePitch: "Main Pitch",
     durationMin: 120,
   },
