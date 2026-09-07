@@ -15,6 +15,8 @@ type MobileView = "day" | "week" | "month";
 
 // Pseudo pitch id for the "Off-site / no pitch" tab (training, away games, Cubs sessions).
 const NO_PITCH = 0;
+// Pseudo pitch id for the "Everything" tab — the default: all pitches + off-site in one list.
+const ALL = -1;
 
 export default function Home() {
   const [pitches, setPitches] = useState<Pitch[]>([]);
@@ -33,7 +35,7 @@ export default function Home() {
     setViewMode(mode);
     localStorage.setItem("pb_view", mode);
   }
-  const [activePitchId, setActivePitchId] = useState<number | null>(null);
+  const [activePitchId, setActivePitchId] = useState<number | null>(ALL);
   const [name, setName] = useState("");
   const [nameInput, setNameInput] = useState("");
   const [modal, setModal] = useState<{
@@ -49,7 +51,6 @@ export default function Home() {
         const pitchList: Pitch[] = await p.json();
         setPitches(pitchList);
         setTeams(await t.json());
-        if (pitchList.length > 0) setActivePitchId(pitchList[0].id);
         setLoaded(true);
       })
       .catch(() => setLoaded(true));
@@ -77,7 +78,8 @@ export default function Home() {
   useEffect(refreshBookings, [refreshBookings]);
 
   const activePitch = pitches.find((p) => p.id === activePitchId) ?? null;
-  const calendarLabel = activePitch?.name ?? "Off-site / no pitch";
+  const calendarLabel =
+    activePitchId === ALL ? "Everything" : (activePitch?.name ?? "Off-site / no pitch");
   const pitchBookings = useMemo(
     () =>
       bookings.filter((b) =>
@@ -129,7 +131,7 @@ export default function Home() {
     setModal({
       booking: null,
       defaults: {
-        pitchId: activePitchId,
+        pitchId: activePitchId === ALL ? (pitches[0]?.id ?? NO_PITCH) : activePitchId,
         date: date ?? toDateStr(new Date()),
         startMin: startMin ?? 18 * 60,
       },
@@ -390,6 +392,24 @@ export default function Home() {
         </div>
 
         <div className="hidden flex-wrap gap-2 md:flex">
+          <button
+            onClick={() => setActivePitchId(ALL)}
+            className={`rounded-full px-4 py-1.5 text-sm font-medium transition ${
+              activePitchId === ALL
+                ? "bg-navy text-white"
+                : "border border-slate-300 bg-white text-slate-700 hover:bg-slate-100"
+            }`}
+            title="Every booking this week — all pitches, away games and training"
+          >
+            Everything
+            {bookings.length > 0 && (
+              <span
+                className={`ml-1.5 text-xs ${activePitchId === ALL ? "text-gold" : "text-slate-400"}`}
+              >
+                {bookings.length}
+              </span>
+            )}
+          </button>
           {pitches.map((p) => {
             const count = bookings.filter((b) => b.pitchId === p.id).length;
             return (
@@ -434,7 +454,24 @@ export default function Home() {
         </div>
 
         <div className="hidden md:block">
-          {activePitchId !== null ? (
+          {activePitchId === ALL ? (
+            <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+              <WeekAgenda
+                days={weekDays(weekStart)}
+                bookings={bookings}
+                onBookingClick={(b) =>
+                  setModal({
+                    booking: b,
+                    defaults: {
+                      pitchId: b.pitchId ?? NO_PITCH,
+                      date: b.date,
+                      startMin: b.startMin,
+                    },
+                  })
+                }
+              />
+            </div>
+          ) : activePitchId !== null ? (
             <WeekCalendar
               weekStart={weekStart}
               label={calendarLabel}
