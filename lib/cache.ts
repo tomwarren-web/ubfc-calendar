@@ -15,6 +15,9 @@ export function cachedJson(data: unknown, tag: string): NextResponse {
       // Browsers must revalidate with the CDN; the CDN serves from cache
       "Cache-Control": "public, max-age=0, must-revalidate",
       "Netlify-CDN-Cache-Control": "public, durable, s-maxage=300, stale-while-revalidate=86400",
+      // Without this, the Next runtime's default cache key IGNORES query
+      // params — every ?from/?to range would share one cached response.
+      "Netlify-Vary": "query",
       "Cache-Tag": tag,
     },
   });
