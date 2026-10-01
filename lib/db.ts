@@ -436,6 +436,7 @@ export async function enrichMatchReport(
        substitutes = CASE WHEN cardinality($3::text[]) > 0 THEN to_jsonb($3::text[]) ELSE substitutes END,
        goalscorers = CASE WHEN cardinality($4::text[]) > 0 THEN to_jsonb($4::text[]) ELSE goalscorers END,
        source_posts = CASE WHEN cardinality($5::text[]) > 0 THEN to_jsonb($5::text[]) ELSE source_posts END,
+       summary = CASE WHEN cardinality($2::text[]) > 0 THEN 'Full-time: ' || headline || '.' ELSE summary END,
        updated_at = now()
      WHERE source_ref = $1 AND team_name = 'First Team'`,
     [
