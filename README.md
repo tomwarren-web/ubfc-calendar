@@ -75,6 +75,8 @@ club members.
 | GET/POST | `/api/pitches`, `/api/teams`                  | List / add pitches and teams                                  |
 | DELETE   | `/api/pitches/:id`, `/api/teams/:id`          | Remove (cascades to their bookings)                           |
 | GET      | `/api/public-fixtures`                        | Public senior fixtures and results feed (youth data excluded) |
+| GET      | `/api/public-match-reports`                   | Published First Team match reports |
+| POST     | `/api/match-reports/x-sync`                   | Enrich reports from `@upperbeedingfc` (sync key required) |
 
 Times are stored as minutes from midnight (`startMin`/`endMin`); the calendar displays
 08:00–22:00.

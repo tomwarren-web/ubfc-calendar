@@ -418,6 +418,36 @@ export async function getMatchReports(from: string, to: string): Promise<MatchRe
   return rows.map(toMatchReport);
 }
 
+export interface MatchReportEnrichment {
+  lineup?: string[];
+  substitutes?: string[];
+  goalscorers?: string[];
+  sourcePosts?: string[];
+}
+
+export async function enrichMatchReport(
+  sourceRef: string,
+  enrichment: MatchReportEnrichment,
+): Promise<void> {
+  await ensureInit();
+  await sql.query(
+    `UPDATE match_reports SET
+       lineup = CASE WHEN cardinality($2::text[]) > 0 THEN to_jsonb($2::text[]) ELSE lineup END,
+       substitutes = CASE WHEN cardinality($3::text[]) > 0 THEN to_jsonb($3::text[]) ELSE substitutes END,
+       goalscorers = CASE WHEN cardinality($4::text[]) > 0 THEN to_jsonb($4::text[]) ELSE goalscorers END,
+       source_posts = CASE WHEN cardinality($5::text[]) > 0 THEN to_jsonb($5::text[]) ELSE source_posts END,
+       updated_at = now()
+     WHERE source_ref = $1 AND team_name = 'First Team'`,
+    [
+      sourceRef,
+      enrichment.lineup ?? [],
+      enrichment.substitutes ?? [],
+      enrichment.goalscorers ?? [],
+      enrichment.sourcePosts ?? [],
+    ],
+  );
+}
+
 export async function backfillMatchReports(from: string, to: string): Promise<number> {
   await ensureInit();
   const rows = (await sql.query(
