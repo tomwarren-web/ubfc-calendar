@@ -87,6 +87,12 @@ export interface FullTimeFixture {
   awayScore: number | null;
 }
 
+export interface FullTimeFixtureDetail {
+  lineup: string[];
+  substitutes: string[];
+  goalscorers: string[];
+}
+
 function stripTags(html: string): string {
   return html
     .replace(/<[^>]*>/g, " ")
@@ -207,4 +213,40 @@ export function parseResults(pageHtml: string): FullTimeFixture[] {
   return [
     ...new Map(results.map((fixture) => [fixture.fixtureId, fixture])).values(),
   ];
+}
+
+function playerNames(section: string): string[] {
+  return [...section.matchAll(/class=["'][^"']*\bname\b[^"']*["'][^>]*>[\s\S]*?<p[^>]*>([\s\S]*?)<\/p>/gi)]
+    .map((match) => stripTags(match[1]))
+    .filter(Boolean);
+}
+
+/** Parses the selected club side of a public displayFixture.html page. */
+export function parseFixtureDetail(pageHtml: string, clubIsHome: boolean): FullTimeFixtureDetail {
+  const sideClass = clubIsHome ? "home-team" : "road-team";
+  const statisticsStart = pageHtml.search(/class=["'][^"']*\bfixture-lineup-statistics\b/i);
+  const statistics = statisticsStart >= 0 ? pageHtml.slice(statisticsStart) : pageHtml;
+  const sideStart = statistics.search(new RegExp(`class=["'][^"']*\\b${sideClass}\\b`, "i"));
+  if (sideStart === -1) return { lineup: [], substitutes: [], goalscorers: [] };
+  const remainder = statistics.slice(sideStart);
+  const nextSide = clubIsHome
+    ? remainder.slice(1).search(/class=["'][^"']*\broad-team\b/i)
+    : remainder.search(/<h2[^>]*>\s*Additional Stats/i);
+  const side = nextSide >= 0 ? remainder.slice(0, clubIsHome ? nextSide + 1 : nextSide) : remainder;
+  const startersStart = side.search(/class=["'][^"']*\bstarters\b/i);
+  const subsStart = side.search(/class=["'][^"']*\bsubs\b/i);
+  const starters = startersStart >= 0 ? side.slice(startersStart, subsStart >= 0 ? subsStart : undefined) : "";
+  const substitutes = subsStart >= 0 ? side.slice(subsStart) : "";
+  const goalscorers: string[] = [];
+  const playerBlocks = starters.match(/class=["'][^"']*\bplayer\b[^"']*["'][\s\S]*?(?=class=["'][^"']*\bplayer\b|$)/gi) ?? [];
+  for (const block of playerBlocks) {
+    if (!/ft-icon\s+ball/i.test(block)) continue;
+    const name = playerNames(block)[0];
+    if (name) goalscorers.push(name);
+  }
+  return {
+    lineup: playerNames(starters),
+    substitutes: playerNames(substitutes),
+    goalscorers: [...new Set(goalscorers)],
+  };
 }

@@ -51,11 +51,41 @@ async function fetchTeamPage(team, i) {
     await page
       .waitForSelector("text=Upcoming Fixtures", { timeout: 30000 })
       .catch(() => null);
+    const completedIds = team.appTeam === "First Team"
+      ? await page.locator("tr").evaluateAll((rows) =>
+          rows
+            .filter((row) => /\d+\s*[-–]\s*\d+/.test(row.innerText))
+            .flatMap((row) =>
+              [...row.querySelectorAll('a[href*="displayFixture.html?id="]')]
+                .map((link) => new URL(link.href).searchParams.get("id"))
+                .filter(Boolean),
+            )
+            .filter((id, index, all) => all.indexOf(id) === index),
+        )
+      : [];
     const html = await page.content();
     if (!html.includes("Upcoming Fixtures")) {
       throw new Error("page did not render fixtures (blocked?)");
     }
-    return html;
+    const fixtureDetails = [];
+    if (team.appTeam === "First Team") {
+      for (const fixtureId of completedIds) {
+        // Full-Time/Cloudflare blocks direct detail-page navigation, while a
+        // user-style click from the team results page is accepted.
+        await page.goto(team.url, { waitUntil: "domcontentloaded", timeout: 45000 });
+        const detailLink = page.locator(`a[href*="displayFixture.html?id=${fixtureId}"]`).first();
+        await Promise.all([
+          page.waitForLoadState("domcontentloaded", { timeout: 45000 }),
+          detailLink.click({ timeout: 15000 }),
+        ]);
+        await page.waitForSelector("text=Lineup", { timeout: 15000 }).catch(() => null);
+        const detailHtml = await page.content();
+        if (detailHtml.includes("Lineup")) fixtureDetails.push({ fixtureId, html: detailHtml });
+        else console.warn(`WARN: fixture ${fixtureId} detail blocked (${await page.title()})`);
+      }
+      console.log(`Fetched ${fixtureDetails.length}/${completedIds.length} First Team match details`);
+    }
+    return { html, fixtureDetails };
   } finally {
     await context.close().catch(() => {});
   }
@@ -67,8 +97,8 @@ for (let i = 0; i < config.length; i++) {
   let lastErr = null;
   for (let attempt = 1; attempt <= 2; attempt++) {
     try {
-      const html = await fetchTeamPage(team, `${i}-${attempt}`);
-      pages.push({ appTeam: team.appTeam, url: team.url, html });
+      const fetched = await fetchTeamPage(team, `${i}-${attempt}`);
+      pages.push({ appTeam: team.appTeam, url: team.url, html: fetched.html, fixtureDetails: fetched.fixtureDetails });
       console.log(`Fetched: ${team.appTeam}${attempt > 1 ? " (retry)" : ""}`);
       lastErr = null;
       break;

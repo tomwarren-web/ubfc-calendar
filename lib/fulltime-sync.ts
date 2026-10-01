@@ -6,6 +6,7 @@ import {
   getPitches,
   getTeams,
   updateBooking,
+  enrichMatchReport,
   upsertMatchResult,
   type BookingInput,
 } from "./db";
@@ -13,6 +14,7 @@ import {
   CLUB_PATTERN,
   FULLTIME_TEAMS,
   parseResults,
+  parseFixtureDetail,
   parseUpcomingFixtures,
 } from "./fulltime";
 import { formatMin, toDateStr } from "./time";
@@ -50,6 +52,7 @@ export interface TeamPage {
    * appear in several competitions (one FA page per competition). */
   url?: string;
   html: string;
+  fixtureDetails?: Array<{ fixtureId: string; html: string }>;
 }
 
 /**
@@ -103,20 +106,21 @@ export async function runFullTimeSync(pages?: TeamPage[]): Promise<SyncReport> {
     }
 
     let html: string;
+    let suppliedPage: TeamPage | undefined;
     if (pages) {
       // Prefer URL matching (unique per config entry); appTeam is the legacy
       // fallback for payloads that don't carry the url field.
-      const page =
+      suppliedPage =
         pages.find((p) => p.url && p.url === cfg.url) ??
         pages.find((p) => !p.url && p.appTeam === cfg.appTeam);
-      if (!page) {
+      if (!suppliedPage) {
         report.errors.push(
           `${cfg.appTeam}: fetcher supplied no page for ${cfg.url}`,
         );
         failedTeamIds.add(appTeam.id);
         continue; // no data — leave this team's existing bookings untouched
       }
-      html = page.html;
+      html = suppliedPage.html;
     } else {
       try {
         const res = await fetch(cfg.url, {
@@ -161,6 +165,13 @@ export async function runFullTimeSync(pages?: TeamPage[]): Promise<SyncReport> {
         venue: result.venue,
         competition: result.competition,
       });
+      if (cfg.appTeam === "First Team") {
+        const detail = suppliedPage?.fixtureDetails?.find((item) => item.fixtureId === result.fixtureId);
+        if (detail) {
+          const clubIsHome = CLUB_PATTERN.test(result.homeTeam);
+          await enrichMatchReport(`${SOURCE_PREFIX}${result.fixtureId}`, parseFixtureDetail(detail.html, clubIsHome));
+        }
+      }
       report.resultsUpdated++;
     }
 

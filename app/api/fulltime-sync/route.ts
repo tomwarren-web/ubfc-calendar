@@ -30,7 +30,8 @@ export async function POST(request: NextRequest) {
         typeof p === "object" &&
         p !== null &&
         typeof (p as TeamPage).appTeam === "string" &&
-        typeof (p as TeamPage).html === "string",
+        typeof (p as TeamPage).html === "string" &&
+        ((p as TeamPage).fixtureDetails === undefined || Array.isArray((p as TeamPage).fixtureDetails)),
     );
   }
 
