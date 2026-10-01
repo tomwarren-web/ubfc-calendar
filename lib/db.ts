@@ -14,6 +14,28 @@ export interface MatchResult {
   competition: string | null;
 }
 
+export interface MatchReport {
+  sourceRef: string;
+  teamName: string;
+  date: string;
+  startMin: number;
+  homeTeam: string;
+  awayTeam: string;
+  homeScore: number;
+  awayScore: number;
+  venue: string | null;
+  competition: string | null;
+  status: "draft" | "published";
+  headline: string;
+  summary: string;
+  lineup: string[];
+  substitutes: string[];
+  goalscorers: string[];
+  sourcePosts: string[];
+  publishedAt: string | null;
+  updatedAt: string;
+}
+
 // Netlify DB (Postgres). Netlify injects NETLIFY_DB_URL in production and under
 // `netlify dev`; other environments can supply DATABASE_URL instead.
 function makeSql() {
@@ -105,6 +127,29 @@ async function init() {
       competition TEXT,
       updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
     )`);
+  await sql.query(`
+    CREATE TABLE IF NOT EXISTS match_reports (
+      source_ref TEXT PRIMARY KEY,
+      team_name TEXT NOT NULL,
+      date TEXT NOT NULL,
+      start_min INTEGER NOT NULL,
+      home_team TEXT NOT NULL,
+      away_team TEXT NOT NULL,
+      home_score INTEGER NOT NULL,
+      away_score INTEGER NOT NULL,
+      venue TEXT,
+      competition TEXT,
+      status TEXT NOT NULL DEFAULT 'published' CHECK (status IN ('draft', 'published')),
+      headline TEXT NOT NULL,
+      summary TEXT NOT NULL,
+      lineup JSONB NOT NULL DEFAULT '[]'::jsonb,
+      substitutes JSONB NOT NULL DEFAULT '[]'::jsonb,
+      goalscorers JSONB NOT NULL DEFAULT '[]'::jsonb,
+      source_posts JSONB NOT NULL DEFAULT '[]'::jsonb,
+      published_at TIMESTAMPTZ,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    )`);
+  await sql.query("CREATE INDEX IF NOT EXISTS idx_match_reports_date ON match_reports(date)");
 
   // Seed the club's pitches and teams on first run so the app is usable immediately.
   const countRows = await sql.query("SELECT COUNT(*) AS c FROM pitches");
@@ -313,6 +358,78 @@ export async function upsertMatchResult(result: MatchResult): Promise<void> {
       result.competition,
     ],
   );
+  await upsertMatchReportFromResult(result);
+}
+
+function reportHeadline(result: MatchResult): string {
+  return `${result.homeTeam} ${result.homeScore}–${result.awayScore} ${result.awayTeam}`;
+}
+
+function reportSummary(result: MatchResult): string {
+  return `Full-time: ${reportHeadline(result)}. Match report details will be added after the team sheet is confirmed.`;
+}
+
+/** Creates or refreshes the score-only report without overwriting editorial details. */
+export async function upsertMatchReportFromResult(result: MatchResult): Promise<void> {
+  if (result.teamName !== "First Team") return;
+  await ensureInit();
+  await sql.query(
+    `INSERT INTO match_reports
+      (source_ref, team_name, date, start_min, home_team, away_team, home_score, away_score,
+       venue, competition, status, headline, summary, published_at, updated_at)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'published',$11,$12,now(),now())
+     ON CONFLICT (source_ref) DO UPDATE SET
+       team_name=$2, date=$3, start_min=$4, home_team=$5, away_team=$6,
+       home_score=$7, away_score=$8, venue=$9, competition=$10,
+       headline=$11, summary=CASE WHEN match_reports.lineup='[]'::jsonb
+         AND match_reports.goalscorers='[]'::jsonb THEN $12 ELSE match_reports.summary END,
+       published_at=COALESCE(match_reports.published_at, now()), updated_at=now()` ,
+    [result.sourceRef, result.teamName, result.date, result.startMin, result.homeTeam,
+      result.awayTeam, result.homeScore, result.awayScore, result.venue, result.competition,
+      reportHeadline(result), reportSummary(result)],
+  );
+}
+
+function parseJsonArray(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value.map(String).filter(Boolean);
+}
+
+function toMatchReport(row: Row): MatchReport {
+  return {
+    sourceRef: String(row.source_ref), teamName: String(row.team_name), date: String(row.date),
+    startMin: Number(row.start_min), homeTeam: String(row.home_team), awayTeam: String(row.away_team),
+    homeScore: Number(row.home_score), awayScore: Number(row.away_score),
+    venue: row.venue == null ? null : String(row.venue),
+    competition: row.competition == null ? null : String(row.competition),
+    status: row.status === "draft" ? "draft" : "published", headline: String(row.headline),
+    summary: String(row.summary), lineup: parseJsonArray(row.lineup),
+    substitutes: parseJsonArray(row.substitutes), goalscorers: parseJsonArray(row.goalscorers),
+    sourcePosts: parseJsonArray(row.source_posts), publishedAt: row.published_at == null ? null : String(row.published_at),
+    updatedAt: String(row.updated_at),
+  };
+}
+
+export async function getMatchReports(from: string, to: string): Promise<MatchReport[]> {
+  await ensureInit();
+  const rows = (await sql.query(
+    `SELECT * FROM match_reports WHERE team_name='First Team' AND status='published'
+     AND date >= $1 AND date <= $2 ORDER BY date DESC, start_min DESC`, [from, to])) as Row[];
+  return rows.map(toMatchReport);
+}
+
+export async function backfillMatchReports(from: string, to: string): Promise<number> {
+  await ensureInit();
+  const rows = (await sql.query(
+    `SELECT source_ref, team_name, date, start_min, home_team, away_team, home_score, away_score, venue, competition
+     FROM match_results WHERE team_name='First Team' AND date >= $1 AND date <= $2 ORDER BY date`, [from, to])) as Row[];
+  for (const row of rows) {
+    await upsertMatchReportFromResult({ sourceRef: String(row.source_ref), teamName: String(row.team_name), date: String(row.date),
+      startMin: Number(row.start_min), homeTeam: String(row.home_team), awayTeam: String(row.away_team),
+      homeScore: Number(row.home_score), awayScore: Number(row.away_score), venue: row.venue == null ? null : String(row.venue),
+      competition: row.competition == null ? null : String(row.competition) });
+  }
+  return rows.length;
 }
 
 export async function getMatchResults(
