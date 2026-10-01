@@ -12,6 +12,7 @@ interface EnrichmentItem {
   substitutes?: string[];
   goalscorers?: string[];
   sourcePosts?: string[];
+  reportSections?: Array<{ heading: string; body: string }>;
 }
 
 export async function POST(request: NextRequest) {
@@ -28,6 +29,9 @@ export async function POST(request: NextRequest) {
       substitutes: Array.isArray(item.substitutes) ? item.substitutes.map(String) : [],
       goalscorers: Array.isArray(item.goalscorers) ? item.goalscorers.map(String) : [],
       sourcePosts: Array.isArray(item.sourcePosts) ? item.sourcePosts.map(String) : [],
+      reportSections: Array.isArray(item.reportSections)
+        ? item.reportSections.map((section: { heading: string; body: string }) => ({ heading: String(section.heading || ""), body: String(section.body || "") }))
+        : [],
     });
   }
   return NextResponse.json({ updated: items.length });

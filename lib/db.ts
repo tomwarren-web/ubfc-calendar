@@ -32,8 +32,14 @@ export interface MatchReport {
   substitutes: string[];
   goalscorers: string[];
   sourcePosts: string[];
+  reportSections: MatchReportSection[];
   publishedAt: string | null;
   updatedAt: string;
+}
+
+export interface MatchReportSection {
+  heading: string;
+  body: string;
 }
 
 // Netlify DB (Postgres). Netlify injects NETLIFY_DB_URL in production and under
@@ -146,9 +152,11 @@ async function init() {
       substitutes JSONB NOT NULL DEFAULT '[]'::jsonb,
       goalscorers JSONB NOT NULL DEFAULT '[]'::jsonb,
       source_posts JSONB NOT NULL DEFAULT '[]'::jsonb,
+      report_sections JSONB NOT NULL DEFAULT '[]'::jsonb,
       published_at TIMESTAMPTZ,
       updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
     )`);
+  await sql.query("ALTER TABLE match_reports ADD COLUMN IF NOT EXISTS report_sections JSONB NOT NULL DEFAULT '[]'::jsonb");
   await sql.query("CREATE INDEX IF NOT EXISTS idx_match_reports_date ON match_reports(date)");
 
   // Seed the club's pitches and teams on first run so the app is usable immediately.
@@ -395,6 +403,17 @@ function parseJsonArray(value: unknown): string[] {
   return value.map(String).filter(Boolean);
 }
 
+function parseReportSections(value: unknown): MatchReportSection[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((section) => {
+    if (!section || typeof section !== "object") return [];
+    const row = section as Record<string, unknown>;
+    const heading = String(row.heading ?? "").trim();
+    const body = String(row.body ?? "").trim();
+    return heading && body ? [{ heading, body }] : [];
+  });
+}
+
 function toMatchReport(row: Row): MatchReport {
   return {
     sourceRef: String(row.source_ref), teamName: String(row.team_name), date: String(row.date),
@@ -405,7 +424,8 @@ function toMatchReport(row: Row): MatchReport {
     status: row.status === "draft" ? "draft" : "published", headline: String(row.headline),
     summary: String(row.summary), lineup: parseJsonArray(row.lineup),
     substitutes: parseJsonArray(row.substitutes), goalscorers: parseJsonArray(row.goalscorers),
-    sourcePosts: parseJsonArray(row.source_posts), publishedAt: row.published_at == null ? null : String(row.published_at),
+    sourcePosts: parseJsonArray(row.source_posts), reportSections: parseReportSections(row.report_sections),
+    publishedAt: row.published_at == null ? null : String(row.published_at),
     updatedAt: String(row.updated_at),
   };
 }
@@ -423,6 +443,7 @@ export interface MatchReportEnrichment {
   substitutes?: string[];
   goalscorers?: string[];
   sourcePosts?: string[];
+  reportSections?: MatchReportSection[];
 }
 
 export async function enrichMatchReport(
@@ -436,6 +457,7 @@ export async function enrichMatchReport(
        substitutes = CASE WHEN cardinality($3::text[]) > 0 THEN to_jsonb($3::text[]) ELSE substitutes END,
        goalscorers = CASE WHEN cardinality($4::text[]) > 0 THEN to_jsonb($4::text[]) ELSE goalscorers END,
        source_posts = CASE WHEN cardinality($5::text[]) > 0 THEN to_jsonb($5::text[]) ELSE source_posts END,
+       report_sections = CASE WHEN jsonb_array_length($6::jsonb) > 0 THEN $6::jsonb ELSE report_sections END,
        summary = CASE WHEN cardinality($2::text[]) > 0 THEN 'Full-time: ' || headline || '.' ELSE summary END,
        updated_at = now()
      WHERE source_ref = $1 AND team_name = 'First Team'`,
@@ -445,6 +467,7 @@ export async function enrichMatchReport(
       enrichment.substitutes ?? [],
       enrichment.goalscorers ?? [],
       enrichment.sourcePosts ?? [],
+      JSON.stringify(enrichment.reportSections ?? []),
     ],
   );
 }
