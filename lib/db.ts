@@ -1,6 +1,19 @@
 import { neon, type NeonQueryFunction } from "@neondatabase/serverless";
 import type { Booking, BookingWithNames, Pitch, Team } from "./types";
 
+export interface MatchResult {
+  sourceRef: string;
+  teamName: string;
+  date: string;
+  startMin: number;
+  homeTeam: string;
+  awayTeam: string;
+  homeScore: number;
+  awayScore: number;
+  venue: string | null;
+  competition: string | null;
+}
+
 // Netlify DB (Postgres). Netlify injects NETLIFY_DB_URL in production and under
 // `netlify dev`; other environments can supply DATABASE_URL instead.
 function makeSql() {
@@ -10,7 +23,7 @@ function makeSql() {
     process.env.DATABASE_URL;
   if (!url) {
     throw new Error(
-      "No database configured — set NETLIFY_DB_URL (or DATABASE_URL) in the environment"
+      "No database configured — set NETLIFY_DB_URL (or DATABASE_URL) in the environment",
     );
   }
   return neon(url);
@@ -59,7 +72,7 @@ async function init() {
       CHECK (end_min > start_min)
     )`);
   await sql.query(
-    "CREATE INDEX IF NOT EXISTS idx_bookings_pitch_date ON bookings(pitch_id, date)"
+    "CREATE INDEX IF NOT EXISTS idx_bookings_pitch_date ON bookings(pitch_id, date)",
   );
   await sql.query(`
     CREATE TABLE IF NOT EXISTS match_contacts (
@@ -76,6 +89,20 @@ async function init() {
     CREATE TABLE IF NOT EXISTS opposition_directory (
       club_name TEXT PRIMARY KEY,
       contact_email TEXT NOT NULL DEFAULT '',
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    )`);
+  await sql.query(`
+    CREATE TABLE IF NOT EXISTS match_results (
+      source_ref TEXT PRIMARY KEY,
+      team_name TEXT NOT NULL,
+      date TEXT NOT NULL,
+      start_min INTEGER NOT NULL,
+      home_team TEXT NOT NULL,
+      away_team TEXT NOT NULL,
+      home_score INTEGER NOT NULL,
+      away_score INTEGER NOT NULL,
+      venue TEXT,
+      competition TEXT,
       updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
     )`);
 
@@ -97,7 +124,10 @@ async function init() {
       ["Cricket Club", "#166534"],
     ];
     for (const [name, colour] of teams) {
-      await sql.query("INSERT INTO teams (name, colour) VALUES ($1, $2)", [name, colour]);
+      await sql.query("INSERT INTO teams (name, colour) VALUES ($1, $2)", [
+        name,
+        colour,
+      ]);
     }
   }
 }
@@ -132,15 +162,18 @@ const bookingSelect = `
 
 export async function getPitches(): Promise<Pitch[]> {
   await ensureInit();
-  const rows = (await sql.query("SELECT id, name FROM pitches ORDER BY id")) as Row[];
+  const rows = (await sql.query(
+    "SELECT id, name FROM pitches ORDER BY id",
+  )) as Row[];
   return rows.map((r) => ({ id: Number(r.id), name: String(r.name) }));
 }
 
 export async function addPitch(name: string): Promise<Pitch> {
   await ensureInit();
-  const rows = (await sql.query("INSERT INTO pitches (name) VALUES ($1) RETURNING id", [
-    name.trim(),
-  ])) as Row[];
+  const rows = (await sql.query(
+    "INSERT INTO pitches (name) VALUES ($1) RETURNING id",
+    [name.trim()],
+  )) as Row[];
   return { id: Number(rows[0].id), name: name.trim() };
 }
 
@@ -152,15 +185,21 @@ export async function deletePitch(id: number): Promise<void> {
 
 export async function getTeams(): Promise<Team[]> {
   await ensureInit();
-  const rows = (await sql.query("SELECT id, name, colour FROM teams ORDER BY id")) as Row[];
-  return rows.map((r) => ({ id: Number(r.id), name: String(r.name), colour: String(r.colour) }));
+  const rows = (await sql.query(
+    "SELECT id, name, colour FROM teams ORDER BY id",
+  )) as Row[];
+  return rows.map((r) => ({
+    id: Number(r.id),
+    name: String(r.name),
+    colour: String(r.colour),
+  }));
 }
 
 export async function addTeam(name: string, colour: string): Promise<Team> {
   await ensureInit();
   const rows = (await sql.query(
     "INSERT INTO teams (name, colour) VALUES ($1, $2) RETURNING id",
-    [name.trim(), colour]
+    [name.trim(), colour],
   )) as Row[];
   return { id: Number(rows[0].id), name: name.trim(), colour };
 }
@@ -171,18 +210,25 @@ export async function deleteTeam(id: number): Promise<void> {
   await sql.query("DELETE FROM teams WHERE id = $1", [id]);
 }
 
-export async function getBookings(from: string, to: string): Promise<BookingWithNames[]> {
+export async function getBookings(
+  from: string,
+  to: string,
+): Promise<BookingWithNames[]> {
   await ensureInit();
   const rows = (await sql.query(
     `${bookingSelect} WHERE b.date >= $1 AND b.date <= $2 ORDER BY b.date, b.start_min`,
-    [from, to]
+    [from, to],
   )) as Row[];
   return rows.map(toBooking);
 }
 
-export async function getBooking(id: number): Promise<BookingWithNames | undefined> {
+export async function getBooking(
+  id: number,
+): Promise<BookingWithNames | undefined> {
   await ensureInit();
-  const rows = (await sql.query(`${bookingSelect} WHERE b.id = $1`, [id])) as Row[];
+  const rows = (await sql.query(`${bookingSelect} WHERE b.id = $1`, [
+    id,
+  ])) as Row[];
   return rows[0] ? toBooking(rows[0]) : undefined;
 }
 
@@ -192,14 +238,14 @@ export async function findClashes(
   date: string,
   startMin: number,
   endMin: number,
-  excludeId?: number
+  excludeId?: number,
 ): Promise<BookingWithNames[]> {
   await ensureInit();
   const rows = (await sql.query(
     `${bookingSelect}
      WHERE b.pitch_id = $1 AND b.date = $2 AND b.start_min < $3 AND b.end_min > $4
      AND b.id != $5`,
-    [pitchId, date, endMin, startMin, excludeId ?? -1]
+    [pitchId, date, endMin, startMin, excludeId ?? -1],
   )) as Row[];
   return rows.map(toBooking);
 }
@@ -211,7 +257,9 @@ export type BookingInput = Omit<Booking, "id" | "createdAt" | "sourceRef"> & {
   sourceRef?: string | null;
 };
 
-export async function createBooking(input: BookingInput): Promise<BookingWithNames> {
+export async function createBooking(
+  input: BookingInput,
+): Promise<BookingWithNames> {
   await ensureInit();
   const rows = (await sql.query(
     `INSERT INTO bookings (pitch_id, team_id, type, title, date, start_min, end_min, booked_by, source_ref)
@@ -226,22 +274,76 @@ export async function createBooking(input: BookingInput): Promise<BookingWithNam
       input.endMin,
       input.bookedBy,
       input.sourceRef ?? null,
-    ]
+    ],
   )) as Row[];
   return (await getBooking(Number(rows[0].id)))!;
 }
 
 /** All bookings whose source_ref starts with the given prefix (e.g. "fulltime:"). */
-export async function getBookingsBySourcePrefix(prefix: string): Promise<BookingWithNames[]> {
+export async function getBookingsBySourcePrefix(
+  prefix: string,
+): Promise<BookingWithNames[]> {
   await ensureInit();
   const rows = (await sql.query(
     `${bookingSelect} WHERE b.source_ref LIKE $1 ORDER BY b.date, b.start_min`,
-    [`${prefix}%`]
+    [`${prefix}%`],
   )) as Row[];
   return rows.map(toBooking);
 }
 
-export async function updateBooking(id: number, input: BookingInput): Promise<BookingWithNames> {
+export async function upsertMatchResult(result: MatchResult): Promise<void> {
+  await ensureInit();
+  await sql.query(
+    `INSERT INTO match_results
+      (source_ref, team_name, date, start_min, home_team, away_team, home_score, away_score, venue, competition, updated_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, now())
+     ON CONFLICT (source_ref) DO UPDATE SET
+       team_name = $2, date = $3, start_min = $4, home_team = $5, away_team = $6,
+       home_score = $7, away_score = $8, venue = $9, competition = $10, updated_at = now()`,
+    [
+      result.sourceRef,
+      result.teamName,
+      result.date,
+      result.startMin,
+      result.homeTeam,
+      result.awayTeam,
+      result.homeScore,
+      result.awayScore,
+      result.venue,
+      result.competition,
+    ],
+  );
+}
+
+export async function getMatchResults(
+  from: string,
+  to: string,
+): Promise<MatchResult[]> {
+  await ensureInit();
+  const rows = (await sql.query(
+    `SELECT source_ref, team_name, date, start_min, home_team, away_team,
+            home_score, away_score, venue, competition
+     FROM match_results WHERE date >= $1 AND date <= $2 ORDER BY date, start_min`,
+    [from, to],
+  )) as Row[];
+  return rows.map((row) => ({
+    sourceRef: String(row.source_ref),
+    teamName: String(row.team_name),
+    date: String(row.date),
+    startMin: Number(row.start_min),
+    homeTeam: String(row.home_team),
+    awayTeam: String(row.away_team),
+    homeScore: Number(row.home_score),
+    awayScore: Number(row.away_score),
+    venue: row.venue == null ? null : String(row.venue),
+    competition: row.competition == null ? null : String(row.competition),
+  }));
+}
+
+export async function updateBooking(
+  id: number,
+  input: BookingInput,
+): Promise<BookingWithNames> {
   await ensureInit();
   await sql.query(
     `UPDATE bookings
@@ -257,7 +359,7 @@ export async function updateBooking(id: number, input: BookingInput): Promise<Bo
       input.endMin,
       input.bookedBy,
       id,
-    ]
+    ],
   );
   return (await getBooking(id))!;
 }
@@ -291,12 +393,14 @@ function toMatchContacts(row: Row): MatchContacts {
   };
 }
 
-export async function getMatchContacts(bookingIds: number[]): Promise<MatchContacts[]> {
+export async function getMatchContacts(
+  bookingIds: number[],
+): Promise<MatchContacts[]> {
   await ensureInit();
   if (bookingIds.length === 0) return [];
   const rows = (await sql.query(
     "SELECT * FROM match_contacts WHERE booking_id = ANY($1::int[])",
-    [bookingIds]
+    [bookingIds],
   )) as Row[];
   return rows.map(toMatchContacts);
 }
@@ -317,7 +421,7 @@ export async function upsertMatchContacts(mc: MatchContacts): Promise<void> {
       mc.oppositionEmail.trim(),
       mc.league.trim(),
       mc.notes.trim(),
-    ]
+    ],
   );
   // Remember the opposition contact season-long so it pre-fills next time
   if (mc.oppositionName.trim() && mc.oppositionEmail.trim()) {
@@ -325,7 +429,7 @@ export async function upsertMatchContacts(mc: MatchContacts): Promise<void> {
       `INSERT INTO opposition_directory (club_name, contact_email, updated_at)
        VALUES ($1, $2, now())
        ON CONFLICT (club_name) DO UPDATE SET contact_email = $2, updated_at = now()`,
-      [mc.oppositionName.trim(), mc.oppositionEmail.trim()]
+      [mc.oppositionName.trim(), mc.oppositionEmail.trim()],
     );
   }
 }
@@ -334,7 +438,7 @@ export async function lookupOppositionEmail(clubName: string): Promise<string> {
   await ensureInit();
   const rows = (await sql.query(
     "SELECT contact_email FROM opposition_directory WHERE lower(club_name) = lower($1)",
-    [clubName.trim()]
+    [clubName.trim()],
   )) as Row[];
   return rows[0] ? String(rows[0].contact_email) : "";
 }

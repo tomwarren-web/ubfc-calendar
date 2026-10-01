@@ -83,6 +83,8 @@ export interface FullTimeFixture {
   venue: string | null;
   competition: string | null;
   status: string | null;
+  homeScore: number | null;
+  awayScore: number | null;
 }
 
 function stripTags(html: string): string {
@@ -108,18 +110,27 @@ export function parseFixtureTable(tableHtml: string): FullTimeFixture[] {
 
     const [, dd, mm, yy] = dateMatch;
     const timeMatch = row.match(/(\d{2}):(\d{2})/);
-    const startMin = timeMatch ? Number(timeMatch[1]) * 60 + Number(timeMatch[2]) : 10 * 60;
+    const startMin = timeMatch
+      ? Number(timeMatch[1]) * 60 + Number(timeMatch[2])
+      : 10 * 60;
 
     // Walk the cells so optional columns (venue, competition, status) land right
-    const cells = [...row.matchAll(/<td([^>]*)>([\s\S]*?)<\/td>/g)].map((m) => ({
-      attrs: m[1],
-      text: stripTags(m[2]),
-    }));
+    const cells = [...row.matchAll(/<td([^>]*)>([\s\S]*?)<\/td>/g)].map(
+      (m) => ({
+        attrs: m[1],
+        text: stripTags(m[2]),
+      }),
+    );
     const homeIdx = cells.findIndex((c) => c.attrs.includes("home-team"));
     const awayIdx = cells.findIndex((c) => c.attrs.includes("road-team"));
     if (homeIdx === -1 || awayIdx === -1) continue;
 
     const statusCell = cells.find((c) => c.attrs.includes("status-notes"));
+    const scoreText = cells
+      .slice(homeIdx + 1, awayIdx)
+      .map((cell) => cell.text)
+      .join(" ");
+    const scoreMatch = scoreText.match(/(\d+)\s*[-–]\s*(\d+)/);
     // After the away-team cell, "left cell-divider" cells are venue then
     // competition when both exist, or just competition when there's no venue
     // column (competitions are short codes; venues are longer ground names).
@@ -138,7 +149,11 @@ export function parseFixtureTable(tableHtml: string): FullTimeFixture[] {
 
     // County Cup rows carry no fixture link, so synthesise a stable key from
     // the date and team names instead.
-    const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 30);
+    const slug = (s: string) =>
+      s
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .slice(0, 30);
     const fixtureId =
       idMatch?.[1] ??
       `x-20${yy}${mm}${dd}-${slug(cells[homeIdx].text)}-${slug(cells[awayIdx].text)}`;
@@ -152,6 +167,8 @@ export function parseFixtureTable(tableHtml: string): FullTimeFixture[] {
       venue,
       competition,
       status: statusCell && statusCell.text ? statusCell.text : null,
+      homeScore: scoreMatch ? Number(scoreMatch[1]) : null,
+      awayScore: scoreMatch ? Number(scoreMatch[2]) : null,
     });
   }
 
@@ -162,12 +179,32 @@ export function parseFixtureTable(tableHtml: string): FullTimeFixture[] {
 export function parseUpcomingFixtures(pageHtml: string): FullTimeFixture[] {
   const sectionStart = pageHtml.indexOf("Upcoming Fixtures");
   if (sectionStart === -1) {
-    throw new Error("page layout changed: no 'Upcoming Fixtures' section found");
+    throw new Error(
+      "page layout changed: no 'Upcoming Fixtures' section found",
+    );
   }
   const section = pageHtml.slice(sectionStart);
   const tableEnd = section.indexOf("</table>");
-  if (tableEnd === -1 || /no fixtures to show/i.test(section.slice(0, tableEnd === -1 ? 2000 : tableEnd))) {
+  if (
+    tableEnd === -1 ||
+    /no fixtures to show/i.test(
+      section.slice(0, tableEnd === -1 ? 2000 : tableEnd),
+    )
+  ) {
     return [];
   }
   return parseFixtureTable(section.slice(0, tableEnd + 8));
+}
+
+/** Finds completed fixtures across the page's results tables. */
+export function parseResults(pageHtml: string): FullTimeFixture[] {
+  const tables = pageHtml.match(/<table[^>]*>[\s\S]*?<\/table>/gi) ?? [];
+  const results = tables
+    .flatMap(parseFixtureTable)
+    .filter(
+      (fixture) => fixture.homeScore !== null && fixture.awayScore !== null,
+    );
+  return [
+    ...new Map(results.map((fixture) => [fixture.fixtureId, fixture])).values(),
+  ];
 }

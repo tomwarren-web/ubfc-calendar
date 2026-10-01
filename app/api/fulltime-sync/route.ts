@@ -1,11 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
-import { emailSyncReport, runFullTimeSync, type TeamPage } from "@/lib/fulltime-sync";
+import {
+  emailSyncReport,
+  runFullTimeSync,
+  type TeamPage,
+} from "@/lib/fulltime-sync";
 import { FULLTIME_TEAMS } from "@/lib/fulltime";
 
 function authorised(request: NextRequest): boolean {
   const secret = process.env.SYNC_SECRET;
   const provided =
-    request.nextUrl.searchParams.get("key") ?? request.headers.get("x-sync-key");
+    request.nextUrl.searchParams.get("key") ??
+    request.headers.get("x-sync-key");
   return Boolean(secret) && provided === secret;
 }
 
@@ -25,14 +30,19 @@ export async function POST(request: NextRequest) {
         typeof p === "object" &&
         p !== null &&
         typeof (p as TeamPage).appTeam === "string" &&
-        typeof (p as TeamPage).html === "string"
+        typeof (p as TeamPage).html === "string",
     );
   }
 
   const report = await runFullTimeSync(pages);
-  if (report.added.length || report.updated.length || report.removed.length) {
+  if (
+    report.added.length ||
+    report.updated.length ||
+    report.removed.length ||
+    report.resultsUpdated
+  ) {
     const { purgeTags } = await import("@/lib/cache");
-    await purgeTags(["bookings"]);
+    await purgeTags(["bookings", "match-results"]);
   }
   await emailSyncReport(report);
   return NextResponse.json(report);
@@ -43,5 +53,7 @@ export async function GET(request: NextRequest) {
   if (!authorised(request)) {
     return NextResponse.json({ error: "unauthorised" }, { status: 401 });
   }
-  return NextResponse.json(FULLTIME_TEAMS.map(({ appTeam, url }) => ({ appTeam, url })));
+  return NextResponse.json(
+    FULLTIME_TEAMS.map(({ appTeam, url }) => ({ appTeam, url })),
+  );
 }

@@ -4,8 +4,8 @@
 // curl/node/headless browsers all get 403; only a real browser passes. This
 // script drives the locally-installed Edge (headed, off-screen) via
 // playwright-core with a persistent profile so the Cloudflare clearance
-// cookie survives between runs, extracts each team's "Upcoming Fixtures"
-// section, and posts the HTML to the calendar's sync endpoint.
+// cookie survives between runs and posts each rendered team page to the
+// calendar, allowing both upcoming fixtures and completed results to sync.
 //
 // Run from the repo root (needs node_modules): node scripts/fulltime-fetch-browser.mjs
 
@@ -19,7 +19,9 @@ const secret = fs
   .readFileSync(path.join(os.homedir(), ".ubfc", "sync-secret.txt"), "utf8")
   .trim();
 
-const config = await (await fetch(`${SITE}/api/fulltime-sync?key=${secret}`)).json();
+const config = await (
+  await fetch(`${SITE}/api/fulltime-sync?key=${secret}`)
+).json();
 console.log(`Teams configured: ${config.length}`);
 
 // Edge proved unreliable when one browser instance is reused across pages
@@ -41,16 +43,19 @@ async function fetchTeamPage(team, i) {
   });
   try {
     const page = await context.newPage();
-    await page.goto(team.url, { waitUntil: "domcontentloaded", timeout: 45000 });
+    await page.goto(team.url, {
+      waitUntil: "domcontentloaded",
+      timeout: 45000,
+    });
     // Give a Cloudflare managed challenge time to auto-pass if one appears
-    await page.waitForSelector("text=Upcoming Fixtures", { timeout: 30000 }).catch(() => null);
+    await page
+      .waitForSelector("text=Upcoming Fixtures", { timeout: 30000 })
+      .catch(() => null);
     const html = await page.content();
     if (!html.includes("Upcoming Fixtures")) {
       throw new Error("page did not render fixtures (blocked?)");
     }
-    const start = html.indexOf("Upcoming Fixtures");
-    const end = html.indexOf("</table>", start);
-    return html.slice(start, end === -1 ? start + 2000 : end + 8);
+    return html;
   } finally {
     await context.close().catch(() => {});
   }

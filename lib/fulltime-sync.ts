@@ -6,9 +6,15 @@ import {
   getPitches,
   getTeams,
   updateBooking,
+  upsertMatchResult,
   type BookingInput,
 } from "./db";
-import { CLUB_PATTERN, FULLTIME_TEAMS, parseUpcomingFixtures } from "./fulltime";
+import {
+  CLUB_PATTERN,
+  FULLTIME_TEAMS,
+  parseResults,
+  parseUpcomingFixtures,
+} from "./fulltime";
 import { formatMin, toDateStr } from "./time";
 
 const SOURCE_PREFIX = "fulltime:";
@@ -20,9 +26,15 @@ export interface SyncReport {
   clashes: string[];
   errors: string[];
   checkedTeams: number;
+  resultsUpdated: number;
 }
 
-function describeFixture(date: string, startMin: number, team: string, title: string): string {
+function describeFixture(
+  date: string,
+  startMin: number,
+  team: string,
+  title: string,
+): string {
   const nice = new Date(date + "T00:00:00").toLocaleDateString("en-GB", {
     weekday: "short",
     day: "numeric",
@@ -59,6 +71,7 @@ export async function runFullTimeSync(pages?: TeamPage[]): Promise<SyncReport> {
     clashes: [],
     errors: [],
     checkedTeams: 0,
+    resultsUpdated: 0,
   };
 
   const [teams, pitches, existing] = await Promise.all([
@@ -76,12 +89,16 @@ export async function runFullTimeSync(pages?: TeamPage[]): Promise<SyncReport> {
   for (const cfg of FULLTIME_TEAMS) {
     const appTeam = teams.find((t) => t.name === cfg.appTeam);
     if (!appTeam) {
-      report.errors.push(`Config error: app team "${cfg.appTeam}" doesn't exist`);
+      report.errors.push(
+        `Config error: app team "${cfg.appTeam}" doesn't exist`,
+      );
       continue;
     }
     const homePitch = pitches.find((p) => p.name === cfg.homePitch);
     if (!homePitch) {
-      report.errors.push(`Config error: pitch "${cfg.homePitch}" doesn't exist`);
+      report.errors.push(
+        `Config error: pitch "${cfg.homePitch}" doesn't exist`,
+      );
       continue;
     }
 
@@ -93,18 +110,24 @@ export async function runFullTimeSync(pages?: TeamPage[]): Promise<SyncReport> {
         pages.find((p) => p.url && p.url === cfg.url) ??
         pages.find((p) => !p.url && p.appTeam === cfg.appTeam);
       if (!page) {
-        report.errors.push(`${cfg.appTeam}: fetcher supplied no page for ${cfg.url}`);
+        report.errors.push(
+          `${cfg.appTeam}: fetcher supplied no page for ${cfg.url}`,
+        );
         failedTeamIds.add(appTeam.id);
         continue; // no data — leave this team's existing bookings untouched
       }
       html = page.html;
     } else {
       try {
-        const res = await fetch(cfg.url, { headers: { "User-Agent": "UBFC-Calendar-Sync/1.0" } });
+        const res = await fetch(cfg.url, {
+          headers: { "User-Agent": "UBFC-Calendar-Sync/1.0" },
+        });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         html = await res.text();
       } catch (err) {
-        report.errors.push(`${cfg.appTeam}: failed to read FA Full-Time (${String(err)})`);
+        report.errors.push(
+          `${cfg.appTeam}: failed to read FA Full-Time (${String(err)})`,
+        );
         failedTeamIds.add(appTeam.id);
         continue;
       }
@@ -114,13 +137,32 @@ export async function runFullTimeSync(pages?: TeamPage[]): Promise<SyncReport> {
     try {
       fixtures = parseUpcomingFixtures(html);
     } catch (err) {
-      report.errors.push(`${cfg.appTeam}: could not parse FA page (${String(err)})`);
+      report.errors.push(
+        `${cfg.appTeam}: could not parse FA page (${String(err)})`,
+      );
       failedTeamIds.add(appTeam.id);
       continue;
     }
 
     report.checkedTeams++;
     syncedTeamIds.add(appTeam.id);
+
+    for (const result of parseResults(html)) {
+      if (result.homeScore === null || result.awayScore === null) continue;
+      await upsertMatchResult({
+        sourceRef: `${SOURCE_PREFIX}${result.fixtureId}`,
+        teamName: cfg.appTeam,
+        date: result.date,
+        startMin: result.startMin,
+        homeTeam: result.homeTeam,
+        awayTeam: result.awayTeam,
+        homeScore: result.homeScore,
+        awayScore: result.awayScore,
+        venue: result.venue,
+        competition: result.competition,
+      });
+      report.resultsUpdated++;
+    }
 
     for (const fx of fixtures) {
       // Postponed/cancelled fixtures are treated as absent: skipped here, so an
@@ -155,19 +197,31 @@ export async function runFullTimeSync(pages?: TeamPage[]): Promise<SyncReport> {
             desired.pitchId,
             desired.date,
             desired.startMin,
-            desired.endMin
+            desired.endMin,
           );
           if (clashes.length > 0) {
             report.clashes.push(
               `${describeFixture(desired.date, desired.startMin, cfg.appTeam, title)} clashes with: ` +
-                clashes.map((c) => `${c.teamName} ${formatMin(c.startMin)}–${formatMin(c.endMin)}`).join("; ")
+                clashes
+                  .map(
+                    (c) =>
+                      `${c.teamName} ${formatMin(c.startMin)}–${formatMin(c.endMin)}`,
+                  )
+                  .join("; "),
             );
             desired.pitchId = null;
             desired.title += " ⚠ imported off-site due to pitch clash";
           }
         }
         await createBooking(desired);
-        report.added.push(describeFixture(desired.date, desired.startMin, cfg.appTeam, desired.title ?? ""));
+        report.added.push(
+          describeFixture(
+            desired.date,
+            desired.startMin,
+            cfg.appTeam,
+            desired.title ?? "",
+          ),
+        );
       } else {
         const changed =
           current.date !== desired.date ||
@@ -184,12 +238,17 @@ export async function runFullTimeSync(pages?: TeamPage[]): Promise<SyncReport> {
             desired.date,
             desired.startMin,
             desired.endMin,
-            current.id
+            current.id,
           );
           if (clashes.length > 0) {
             report.clashes.push(
               `${describeFixture(desired.date, desired.startMin, cfg.appTeam, title)} clashes with: ` +
-                clashes.map((c) => `${c.teamName} ${formatMin(c.startMin)}–${formatMin(c.endMin)}`).join("; ")
+                clashes
+                  .map(
+                    (c) =>
+                      `${c.teamName} ${formatMin(c.startMin)}–${formatMin(c.endMin)}`,
+                  )
+                  .join("; "),
             );
             desired.pitchId = null;
             desired.title += " ⚠ moved off-site due to pitch clash";
@@ -198,7 +257,7 @@ export async function runFullTimeSync(pages?: TeamPage[]): Promise<SyncReport> {
         await updateBooking(current.id, desired);
         report.updated.push(
           `${describeFixture(current.date, current.startMin, cfg.appTeam, current.title ?? "")} → ` +
-            `${describeFixture(desired.date, desired.startMin, cfg.appTeam, desired.title ?? "")}`
+            `${describeFixture(desired.date, desired.startMin, cfg.appTeam, desired.title ?? "")}`,
         );
       }
     }
@@ -213,7 +272,9 @@ export async function runFullTimeSync(pages?: TeamPage[]): Promise<SyncReport> {
     if (b.date < today) continue; // leave history alone
     if (!syncedTeamIds.has(b.teamId) || failedTeamIds.has(b.teamId)) continue;
     await deleteBooking(b.id);
-    report.removed.push(describeFixture(b.date, b.startMin, b.teamName, b.title ?? ""));
+    report.removed.push(
+      describeFixture(b.date, b.startMin, b.teamName, b.title ?? ""),
+    );
   }
 
   return report;
@@ -234,7 +295,9 @@ export async function emailSyncReport(report: SyncReport): Promise<void> {
   if (!apiKey || !to) return;
 
   const section = (heading: string, items: string[]) =>
-    items.length ? `${heading}\n${items.map((i) => `• ${i}`).join("\n")}\n\n` : "";
+    items.length
+      ? `${heading}\n${items.map((i) => `• ${i}`).join("\n")}\n\n`
+      : "";
   const text =
     section("⚠ NEEDS ATTENTION — pitch clashes:", report.clashes) +
     section("⚠ Sync problems:", report.errors) +
@@ -269,7 +332,10 @@ export async function emailSyncReport(report: SyncReport): Promise<void> {
   try {
     const res = await fetch("https://api.resend.com/emails", {
       method: "POST",
-      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
       body: JSON.stringify({
         from: process.env.NUDGE_FROM ?? "UBFC Calendar <onboarding@resend.dev>",
         to: [to],
@@ -288,7 +354,12 @@ export async function emailSyncReport(report: SyncReport): Promise<void> {
         text,
       }),
     });
-    if (!res.ok) console.error("emailSyncReport: Resend error", res.status, await res.text());
+    if (!res.ok)
+      console.error(
+        "emailSyncReport: Resend error",
+        res.status,
+        await res.text(),
+      );
   } catch (err) {
     console.error("emailSyncReport: failed", err);
   }

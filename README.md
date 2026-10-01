@@ -66,14 +66,15 @@ club members.
 
 ## API
 
-| Method | Route | Purpose |
-| --- | --- | --- |
-| GET | `/api/bookings?from=YYYY-MM-DD&to=YYYY-MM-DD` | Bookings in a date range |
-| POST | `/api/bookings` | Create a booking (409 + clash details on conflict) |
-| PUT | `/api/bookings/:id` | Update a booking (same clash check, excluding itself) |
-| DELETE | `/api/bookings/:id` | Delete a booking |
-| GET/POST | `/api/pitches`, `/api/teams` | List / add pitches and teams |
-| DELETE | `/api/pitches/:id`, `/api/teams/:id` | Remove (cascades to their bookings) |
+| Method   | Route                                         | Purpose                                                       |
+| -------- | --------------------------------------------- | ------------------------------------------------------------- |
+| GET      | `/api/bookings?from=YYYY-MM-DD&to=YYYY-MM-DD` | Bookings in a date range                                      |
+| POST     | `/api/bookings`                               | Create a booking (409 + clash details on conflict)            |
+| PUT      | `/api/bookings/:id`                           | Update a booking (same clash check, excluding itself)         |
+| DELETE   | `/api/bookings/:id`                           | Delete a booking                                              |
+| GET/POST | `/api/pitches`, `/api/teams`                  | List / add pitches and teams                                  |
+| DELETE   | `/api/pitches/:id`, `/api/teams/:id`          | Remove (cascades to their bookings)                           |
+| GET      | `/api/public-fixtures`                        | Public senior fixtures and results feed (youth data excluded) |
 
 Times are stored as minutes from midnight (`startMin`/`endMin`); the calendar displays
 08:00–22:00.
